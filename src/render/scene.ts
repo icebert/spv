@@ -231,15 +231,18 @@ export class Viewer {
         .add(new Vector3(0, 0, 3).applyQuaternion(this.rig.camera.quaternion));
       this.axesCamera.lookAt(0, 0, 0);
       this.axesCamera.up.copy(this.rig.camera.up);
-      r.autoClear = false;
-      r.clearDepth();
-      r.setViewport(8, 8, s, s);
-      r.setScissor(8, 8, s, s);
-      r.setScissorTest(true);
-      r.render(this.axesScene, this.axesCamera);
-      r.setScissorTest(false);
-      r.setViewport(0, 0, this.size.x, this.size.y);
-      r.autoClear = true;
+      try {
+        r.autoClear = false;
+        r.clearDepth();
+        r.setViewport(8, 8, s, s);
+        r.setScissor(8, 8, s, s);
+        r.setScissorTest(true);
+        r.render(this.axesScene, this.axesCamera);
+      } finally {
+        r.setScissorTest(false);
+        r.setViewport(0, 0, this.size.x, this.size.y);
+        r.autoClear = true;
+      }
     }
     this.frames++;
   }

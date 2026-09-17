@@ -42,6 +42,7 @@ export class GpuPicker {
   ): Promise<number> {
     if (this.busy) return -2;
     this.busy = true;
+    this.restored = false;
     const r = this.renderer;
     const dpr = r.getPixelRatio();
     const cam = camera as Camera & {
@@ -66,16 +67,36 @@ export class GpuPicker {
       r.setClearColor(0x000000, 0);
       r.clear();
       r.render(points.object, camera);
-      const buf = await r.readRenderTargetPixelsAsync(this.target, 0, 0, 1, 1, this.pixel);
+      // readRenderTargetPixelsAsync issues the GPU read immediately and only awaits the fence,
+      // so all render state can be restored before waiting; a frame drawn meanwhile is unaffected.
+      const pending = r.readRenderTargetPixelsAsync(this.target, 0, 0, 1, 1, this.pixel);
+      this.restore(points, cam, prevMaterial, prevTarget, prevAlpha);
+      const buf = await pending;
       const id = buf[0] | (buf[1] << 8) | (buf[2] << 16);
       return id - 1;
+    } catch {
+      this.restore(points, cam, prevMaterial, prevTarget, prevAlpha);
+      return -1;
     } finally {
-      cam.clearViewOffset();
-      points.object.material = prevMaterial;
-      r.setRenderTarget(prevTarget);
-      r.setClearColor(this.clearColor, prevAlpha);
       this.busy = false;
     }
+  }
+
+  private restored = false;
+
+  private restore(
+    points: PointCloud,
+    cam: { clearViewOffset(): void },
+    prevMaterial: PointCloud['object']['material'],
+    prevTarget: ReturnType<WebGLRenderer['getRenderTarget']>,
+    prevAlpha: number,
+  ): void {
+    if (this.restored) return;
+    this.restored = true;
+    cam.clearViewOffset();
+    points.object.material = prevMaterial;
+    this.renderer.setRenderTarget(prevTarget);
+    this.renderer.setClearColor(this.clearColor, prevAlpha);
   }
 
   dispose(): void {
