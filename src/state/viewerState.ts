@@ -31,6 +31,8 @@ export interface CoordsState {
 export interface AlignmentState {
   dx: number;
   dy: number;
+  /** z offset in raw file units (moves a section that sits at the wrong z) */
+  dz: number;
   rot: number;
   fx: boolean;
   fy: boolean;

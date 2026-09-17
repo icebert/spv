@@ -20,7 +20,19 @@
         "Itpr1",
         "Cacnb4",
         "Gria2"
-      ]
+      ],
+      "section_alignment": {
+        "slice3": {
+          "dz": 5
+        },
+        "slice5": {
+          "dz": 2
+        },
+        "slice8": {
+          "dz": -3
+        }
+      },
+      "section_alignment_note": "z offsets (file units) that put slice3, slice5 and slice8 back on the 20-unit spacing of their neighbours: 355→360, 398→400, 461→458. The .h5ad is unchanged; reset in Sections › Align current section."
     }
   ]
 }

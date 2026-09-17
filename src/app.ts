@@ -31,12 +31,13 @@ import {
   type DisplayFrame,
   type LayoutParams,
   type LayoutResult,
+  type SectionAlignment,
   type SectionGeom,
 } from './render/sections';
 import { Matrix4 } from 'three';
 import { Store } from './state/store';
 import { parseState, serializeState } from './state/urlState';
-import { defaultState, type ViewerState } from './state/viewerState';
+import { defaultState, type AlignmentState, type ViewerState } from './state/viewerState';
 
 export interface ManifestEntry {
   id: string;
@@ -49,6 +50,8 @@ export interface ManifestEntry {
   default_color_by?: { type: string; key: string };
   default_tooltip_fields?: string[];
   example_genes?: string[];
+  /** per-section manual alignment applied by default (file units / degrees), keyed by section name */
+  section_alignment?: Record<string, Partial<AlignmentState>>;
 }
 
 export interface LegendModel {
@@ -203,6 +206,7 @@ export class App {
   private prevPlanar = false;
   private applyingUrl = false;
   private urlHadFlip = false;
+  private urlHadAlignment = false;
   private urlTimer = 0;
   private scalarValues: Float32Array | null = null;
   private scalarQuantiles: Float64Array | null = null;
@@ -466,6 +470,8 @@ export class App {
       onProgress({ stage: 'coordinates', done: 0, total: 1, message: 'Reading coordinates' });
       await this.loadSpatial(token, abort.signal);
       if (token !== this.openToken) return;
+      if (entry?.section_alignment && !(this.applyingUrl && this.urlHadAlignment))
+        this.applyManifestAlignment(entry.section_alignment);
       await this.loadVarNames();
       if (token !== this.openToken) return;
       const c = this.store.slice('color');
@@ -1382,21 +1388,19 @@ export class App {
 
   // --- alignment / crossfade / graph / moranI (nice-to-haves) -------------------------------------------
   /** Raw-unit alignment state → unit-cube display-frame alignment for the section table. */
-  private alignmentMap(
-    al: ViewerState['layout']['alignment'],
-  ): Map<number, { dx: number; dy: number; rotation: number; flipX: boolean; flipY: boolean }> {
-    const m = new Map<
-      number,
-      { dx: number; dy: number; rotation: number; flipX: boolean; flipY: boolean }
-    >();
+  private alignmentMap(al: ViewerState['layout']['alignment']): Map<number, SectionAlignment> {
+    const m = new Map<number, SectionAlignment>();
     const scale = this.spatial?.scale ?? 1;
     const sx = this.frame.flipX ? -1 : 1;
     const sy = this.frame.flipY ? -1 : 1;
+    const sz = this.frame.flipZ ? -1 : 1;
     for (const [k, a] of Object.entries(al)) {
-      if (a.dx === 0 && a.dy === 0 && a.rot === 0 && !a.fx && !a.fy) continue;
+      const dz = a.dz ?? 0;
+      if (a.dx === 0 && a.dy === 0 && dz === 0 && a.rot === 0 && !a.fx && !a.fy) continue;
       m.set(Number(k), {
         dx: a.dx * scale * sx,
         dy: a.dy * scale * sy,
+        dz: dz * scale * sz,
         rotation: (a.rot * Math.PI) / 180,
         flipX: a.fx,
         flipY: a.fy,
@@ -1407,8 +1411,50 @@ export class App {
 
   setAlignment(ordinal: number, patch: Partial<ViewerState['layout']['alignment'][number]>): void {
     const cur = this.store.slice('layout').alignment;
-    const prev = cur[ordinal] ?? { dx: 0, dy: 0, rot: 0, fx: false, fy: false };
+    const prev = cur[ordinal] ?? { dx: 0, dy: 0, dz: 0, rot: 0, fx: false, fy: false };
     this.store.update('layout', { alignment: { ...cur, [ordinal]: { ...prev, ...patch } } });
+  }
+
+  /** Manifest default: section-name keyed alignment → ordinal keyed store state. */
+  private applyManifestAlignment(byName: NonNullable<ManifestEntry['section_alignment']>): void {
+    const alignment: ViewerState['layout']['alignment'] = {};
+    for (const s of this.sections) {
+      const a = byName[s.name];
+      if (a)
+        alignment[s.ordinal] = {
+          dx: a.dx ?? 0,
+          dy: a.dy ?? 0,
+          dz: a.dz ?? 0,
+          rot: a.rot ?? 0,
+          fx: a.fx ?? false,
+          fy: a.fy ?? false,
+        };
+    }
+    if (Object.keys(alignment).length) this.store.update('layout', { alignment });
+  }
+
+  /** Section z as displayed: the file's z plus the manual z offset (raw units), or null for 2-D data. */
+  sectionZ(ordinal: number): number | null {
+    const s = this.sections[ordinal];
+    if (!s || s.z === null) return null;
+    return s.z + (this.store.slice('layout').alignment[ordinal]?.dz ?? 0);
+  }
+
+  /**
+   * Put a section back onto its neighbours' spacing: previous section z + the median step of the
+   * stack (or next − step for the first section). Records the result as a z offset.
+   */
+  snapSectionZ(ordinal: number): void {
+    const zs = this.sections.map((_, i) => this.sectionZ(i));
+    if (zs.some((z) => z === null) || zs.length < 3) return;
+    const z = zs as number[];
+    const steps = z
+      .slice(1)
+      .map((v, i) => v - z[i])
+      .sort((a, b) => a - b);
+    const step = steps[Math.floor(steps.length / 2)];
+    const target = ordinal > 0 ? z[ordinal - 1] + step : z[1] - step;
+    this.setAlignment(ordinal, { dz: Number((target - this.sections[ordinal].z!).toFixed(6)) });
   }
 
   resetAlignment(ordinal?: number): void {
@@ -1857,6 +1903,7 @@ export class App {
     const { state } = parseState(raw);
     this.applyingUrl = true;
     this.urlHadFlip = /(^|&)flip=/.test(raw);
+    this.urlHadAlignment = /(^|&)al=/.test(raw);
     this.store.batch(() => {
       for (const key of Object.keys(state) as (keyof ViewerState)[])
         this.store.replace(key, state[key]);

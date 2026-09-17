@@ -290,7 +290,7 @@ test.describe('nice-to-haves', () => {
     await page2.goto(link);
     await waitReady(page2);
     const al = (await info(page2)).alignment;
-    expect(al['1']).toEqual({ dx: 20, dy: -10, rot: 15, fx: true, fy: false });
+    expect(al['1']).toEqual({ dx: 20, dy: -10, dz: 0, rot: 15, fx: true, fy: false });
     await page2.evaluate(() => window.__spv.app.resetAlignment());
     expect((await info(page2)).alignment).toEqual({});
   });

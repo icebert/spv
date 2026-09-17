@@ -117,13 +117,17 @@ describe('section layouts', () => {
   it('alignment offsets shift sections and rotation widens the bounds', () => {
     const r = layoutOffsets(geoms, {
       ...DEFAULT_LAYOUT,
-      alignment: new Map([[0, { dx: 0.3, dy: 0, rotation: 0, flipX: false, flipY: false }]]),
+      alignment: new Map([
+        [0, { dx: 0.3, dy: 0, dz: 0.05, rotation: 0, flipX: false, flipY: false }],
+      ]),
     });
     expect(r.offsets[0].dx).toBe(0.3);
+    expect(r.offsets[0].dz).toBeCloseTo(0.05, 9);
+    expect(r.bounds.min[2]).toBeCloseTo(-0.15, 9);
     const rot = layoutOffsets(geoms, {
       ...DEFAULT_LAYOUT,
       alignment: new Map([
-        [3, { dx: 0, dy: 0, rotation: Math.PI / 4, flipX: false, flipY: false }],
+        [3, { dx: 0, dy: 0, dz: 0, rotation: Math.PI / 4, flipX: false, flipY: false }],
       ]),
     });
     expect(rot.bounds.max[0]).toBeGreaterThan(r.bounds.max[0]);

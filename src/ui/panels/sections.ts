@@ -1,6 +1,7 @@
 import type { App } from '../../app';
 import { LAYOUT_MODES, hasNativeZ, type LayoutMode } from '../../render/sections';
 import {
+  append,
   button,
   checkbox,
   clear,
@@ -339,13 +340,14 @@ export function sectionsPanel(app: App): Panel {
     const a = app.store.slice('layout').alignment[cur.ordinal] ?? {
       dx: 0,
       dy: 0,
+      dz: 0,
       rot: 0,
       fx: false,
       fy: false,
     };
     const extent = Math.max(sp.rawMax[0] - sp.rawMin[0], sp.rawMax[1] - sp.rawMin[1]) || 1;
     const step = Number((extent / 200).toPrecision(2));
-    const num = (label: string, value: number, key: 'dx' | 'dy' | 'rot', st: number) => {
+    const num = (label: string, value: number, key: 'dx' | 'dy' | 'dz' | 'rot', st: number) => {
       const input = el('input', {
         type: 'number',
         className: 'spv-input',
@@ -368,7 +370,8 @@ export function sectionsPanel(app: App): Panel {
         }),
       );
     };
-    alignBox.append(
+    append(
+      alignBox,
       el(
         'div',
         { style: 'font-size:12px;color:var(--spv-muted)' },
@@ -377,6 +380,26 @@ export function sectionsPanel(app: App): Panel {
       num('X offset', a.dx, 'dx', step),
       num('Y offset', a.dy, 'dy', step),
       num('Rotation', a.rot, 'rot', 1),
+      cur.z !== null
+        ? el(
+            'div',
+            null,
+            num('Z offset', a.dz, 'dz', step),
+            el(
+              'div',
+              'spv-row',
+              el(
+                'span',
+                { style: 'font-size:12px;color:var(--spv-muted)' },
+                `z in file ${cur.z} → shown at ${Number((cur.z + a.dz).toPrecision(8))}`,
+              ),
+              button('Snap z to neighbours', () => app.snapSectionZ(cur.ordinal), {
+                className: 'spv-small',
+                title: 'Previous section z + the median section spacing',
+              }),
+            ),
+          )
+        : null,
       el(
         'div',
         'spv-row',

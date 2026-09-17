@@ -94,10 +94,10 @@ export function serializeState(s: ViewerState): string {
   if (l.dimOthers) p.set('dim', '1');
   if (!l.crossfade) p.set('cf', '0');
   const al = Object.entries(l.alignment)
-    .filter(([, a]) => a.dx !== 0 || a.dy !== 0 || a.rot !== 0 || a.fx || a.fy)
+    .filter(([, a]) => a.dx !== 0 || a.dy !== 0 || a.dz !== 0 || a.rot !== 0 || a.fx || a.fy)
     .map(
       ([k, a]) =>
-        `${k}:${num(a.dx)},${num(a.dy)},${num(a.rot, 2)},${a.fx ? 'x' : ''}${a.fy ? 'y' : ''}`,
+        `${k}:${num(a.dx)},${num(a.dy)},${num(a.rot, 2)},${a.fx ? 'x' : ''}${a.fy ? 'y' : ''}${a.dz !== 0 ? `,${num(a.dz)}` : ''}`,
     );
   if (al.length) p.set('al', al.join(';'));
   // graph overlay
@@ -201,11 +201,12 @@ export function parseState(hash: string): { state: ViewerState; version: number 
   if (p.has('al')) {
     const alignment: Record<number, AlignmentState> = {};
     for (const part of p.get('al')!.split(';')) {
-      const m = /^(\d+):(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),([xy]*)$/.exec(part);
+      const m = /^(\d+):(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),([xy]*)(?:,(-?[\d.]+))?$/.exec(part);
       if (!m) continue;
       alignment[Number(m[1])] = {
         dx: Number(m[2]),
         dy: Number(m[3]),
+        dz: m[6] ? Number(m[6]) : 0,
         rot: Number(m[4]),
         fx: m[5].includes('x'),
         fy: m[5].includes('y'),

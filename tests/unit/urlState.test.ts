@@ -45,8 +45,8 @@ describe('url state', () => {
       playing: false,
       playFps: 2,
       alignment: {
-        0: { dx: 12.5, dy: -3, rot: 90, fx: true, fy: false },
-        4: { dx: 0, dy: 1, rot: 0, fx: false, fy: true },
+        0: { dx: 12.5, dy: -3, dz: 0, rot: 90, fx: true, fy: false },
+        4: { dx: 0, dy: 1, dz: -7.5, rot: 0, fx: false, fy: true },
       },
       crossfade: false,
     };

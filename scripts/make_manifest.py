@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Generate ``data/datasets.json`` from one or more ``*.meta.json`` files written by inspect_h5ad.py.
 
+Keys that are not derived from the inspection (for example ``section_alignment`` — per-section manual
+corrections applied by default in the viewer) are preserved from the existing manifest.
+
 Every manifest value is derived from the inspection output (nothing is hard-coded), so the
 manifest can never disagree with the file. Re-run after replacing a dataset.
 
@@ -56,7 +59,18 @@ def main() -> None:
     ap.add_argument("meta", nargs="+")
     ap.add_argument("--out", default=os.path.join("data", "datasets.json"))
     args = ap.parse_args()
-    manifest = {"datasets": [entry_from_meta(m) for m in args.meta]}
+    entries = [entry_from_meta(m) for m in args.meta]
+    # Preserve hand-maintained keys (e.g. section_alignment, notes) from an existing manifest.
+    if os.path.exists(args.out):
+        try:
+            old = {d["id"]: d for d in json.load(open(args.out)).get("datasets", [])}
+        except (OSError, ValueError, KeyError):
+            old = {}
+        for e in entries:
+            for k, v in old.get(e["id"], {}).items():
+                if k not in e:
+                    e[k] = v
+    manifest = {"datasets": entries}
     with open(args.out, "w") as fh:
         json.dump(manifest, fh, indent=2, ensure_ascii=False)
         fh.write("\n")

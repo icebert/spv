@@ -12,6 +12,8 @@ export const LAYOUT_MODES: LayoutMode[] = ['stack', 'stack-normalized', 'tile', 
 export interface SectionAlignment {
   dx: number;
   dy: number;
+  /** unit-cube z offset (corrects a section stored at the wrong z) */
+  dz: number;
   /** radians */
   rotation: number;
   flipX: boolean;
@@ -215,6 +217,7 @@ export function layoutOffsets(geoms: SectionGeom[], p: LayoutParams): LayoutResu
     if (a) {
       dx += a.dx;
       dy += a.dy;
+      dz += a.dz;
     }
     if (p.hidden.has(i)) alpha = 0;
     else if (p.dimOthers && p.mode !== 'single' && i !== p.current)
