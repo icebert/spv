@@ -1859,6 +1859,34 @@ export class App {
     return { id, index, section, colorLabel, colorValue, fields, x, y };
   }
 
+  /** Diagnostic (key D): which sections the GPU rasterised for the current view vs. what the table says. */
+  drawnSectionsReport(): string {
+    const sp = this.spatial;
+    const table = this.table;
+    if (!sp || !table) return 'No dataset loaded.';
+    const counts = this.viewer.census();
+    const perSection = new Map<string, number>();
+    let noSection = 0;
+    for (const [id, px] of counts) {
+      const ord = sp.sectionOf ? sp.sectionOf[id] : 0xffff;
+      if (ord === 0xffff) noSection += px;
+      else {
+        const name = sp.sections[ord]?.name ?? `ordinal ${ord}`;
+        perSection.set(name, (perSection.get(name) ?? 0) + px);
+      }
+    }
+    const expected = table.geoms.filter((_g, i) => table.data[i * 4 + 3] > 0).map((g) => g.name);
+    const drawn = [...perSection.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([n, px]) => `${n} (${px.toLocaleString()} px)`);
+    const gl = this.viewer.renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = ext
+      ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))
+      : String(gl.getParameter(gl.RENDERER));
+    return `Drawn: ${drawn.join(', ') || 'nothing'}${noSection ? `; no-section points ${noSection} px` : ''}. Visible per section table: ${expected.join(', ') || 'none'}. Layout ${this.store.slice('layout').mode}, DPR ${window.devicePixelRatio}, ${renderer}.`;
+  }
+
   // --- export / share -----------------------------------------------------------------------------------
   async screenshot(scale: 1 | 2, transparent: boolean): Promise<void> {
     const blob = await this.viewer.screenshot({ scale, transparent });

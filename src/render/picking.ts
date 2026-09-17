@@ -99,6 +99,46 @@ export class GpuPicker {
     this.renderer.setClearColor(this.clearColor, prevAlpha);
   }
 
+  /**
+   * Diagnostic: render the points with the id material into an offscreen buffer and return how
+   * many pixels each point id covered, so we can tell which sections the GPU actually drew.
+   */
+  census(points: PointCloud, camera: Camera, width = 320, height = 200): Map<number, number> {
+    const r = this.renderer;
+    const target = new WebGLRenderTarget(width, height, {
+      minFilter: NearestFilter,
+      magFilter: NearestFilter,
+      format: RGBAFormat,
+      type: UnsignedByteType,
+      depthBuffer: true,
+      stencilBuffer: false,
+    });
+    const prevMaterial = points.object.material;
+    const prevTarget = r.getRenderTarget();
+    const prevAlpha = r.getClearAlpha();
+    r.getClearColor(this.clearColor);
+    const counts = new Map<number, number>();
+    try {
+      points.object.material = points.pickMaterial;
+      r.setRenderTarget(target);
+      r.setClearColor(0x000000, 0);
+      r.clear();
+      r.render(points.object, camera);
+      const buf = new Uint8Array(width * height * 4);
+      r.readRenderTargetPixels(target, 0, 0, width, height, buf);
+      for (let i = 0; i < buf.length; i += 4) {
+        const id = (buf[i] | (buf[i + 1] << 8) | (buf[i + 2] << 16)) - 1;
+        if (id >= 0) counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    } finally {
+      points.object.material = prevMaterial;
+      r.setRenderTarget(prevTarget);
+      r.setClearColor(this.clearColor, prevAlpha);
+      target.dispose();
+    }
+    return counts;
+  }
+
   dispose(): void {
     this.target.dispose();
   }

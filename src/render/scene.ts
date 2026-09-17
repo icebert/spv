@@ -222,6 +222,9 @@ export class Viewer {
     const r = this.renderer;
     r.setViewport(0, 0, this.size.x, this.size.y);
     r.setScissorTest(false);
+    r.setRenderTarget(null);
+    r.autoClear = true;
+    r.clear(true, true, true); // explicit: never rely on the previous frame having been discarded
     r.render(this.scene, this.rig.camera);
     if (this.showAxes) {
       const s = Math.min(110, Math.floor(Math.min(this.size.x, this.size.y) * 0.22));
@@ -245,6 +248,12 @@ export class Viewer {
       }
     }
     this.frames++;
+  }
+
+  /** Diagnostic: pixels drawn per point id in an offscreen render of the current view. */
+  census(): Map<number, number> {
+    if (!this.pointCloud) return new Map();
+    return this.picker.census(this.pointCloud, this.rig.camera);
   }
 
   /** Point index under the cursor (CSS px relative to the canvas), or -1. */

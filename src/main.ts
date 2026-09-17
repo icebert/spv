@@ -249,6 +249,13 @@ function main(): void {
       case 'X':
         app.setSelectMode(!app.selectMode);
         break;
+      case 'd':
+      case 'D': {
+        const report = app.drawnSectionsReport();
+        console.info(report);
+        toast(report, 'info', 20000);
+        break;
+      }
       case '?':
         openHelp();
         break;

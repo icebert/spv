@@ -13,6 +13,7 @@ const SHORTCUTS: [string, string][] = [
   ['L', 'Cycle layout mode'],
   ['O', 'Toggle orthographic camera'],
   ['X', 'Toggle lasso / box selection mode (Shift-drag for a box)'],
+  ['D', 'Diagnostic: which sections are actually drawn in the current view'],
   ['Esc', 'Clear selection / close dialogs'],
 ];
 
