@@ -112,6 +112,21 @@ curl -sI -H "Origin: https://<user>.github.io" -r 0-7 "https://host/path/file.h5
 
 You want `HTTP 206`, an `Access-Control-Allow-Origin` header and `Accept-Ranges: bytes`.
 
+How the lazy loader requests bytes, and why it matters for Safari: the file is read in 1 MiB
+chunks, and every chunk is requested under its own URL (`file.h5ad?spv_range=<from>-<to>`; static
+hosts ignore the query string). Safari's HTTP cache is keyed by URL and ignores the `Range` header,
+so without this a cached partial response for one range can be handed back for another range of the
+same URL, and HDF5 would silently read another part of the file (cells drawn with other cells'
+coordinates, sections at the wrong z). Every response is also verified against its `Content-Range`
+and length; a wrong or truncated response is retried once with a cache-busting parameter and then
+reported as an error instead of being used, and a server that ignores `Range` and returns the whole
+file with `200` is handled by slicing locally. Two consequences for hosting:
+
+- URLs that already carry a query string (signed S3/GCS/Azure URLs) are never altered, so the
+  per-chunk key is not added. Serve such files with `Cache-Control: no-store` if Safari users matter.
+- Cross-origin hosts should expose the range header (`Access-Control-Expose-Headers: Content-Range`);
+  otherwise only the response length can be checked.
+
 ## Preparing a large dataset
 
 `scripts/prepare_h5ad.py` shrinks and converts files without touching the original:
@@ -153,7 +168,7 @@ npm run dev          # Vite dev server with data/ served at /data/ (Range-capabl
 npm run typecheck    # three tsconfigs: app (DOM), worker (WebWorker), node (tests/config)
 npm run lint         # eslint + prettier --check
 npm test             # vitest: reader against every fixture, colormaps, palettes, layouts, URL state
-npm run e2e          # playwright: production build at /spv/, demo + fixtures + error paths
+npm run e2e          # playwright: builds to dist-e2e/ and serves it at http://localhost:4174/spv/ (never touches dist/ or a running preview)
 npm run build && npm run preview
 python scripts/make_fixtures.py        # regenerate tests/fixtures (committed)
 python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synthetic files (gitignored)
@@ -174,6 +189,7 @@ python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synt
 | `L` | Cycle layout mode |
 | `O` | Toggle orthographic camera |
 | `X` | Lasso / box selection mode (Shift-drag for a box) |
+| `D` | Diagnostic toast: sections the GPU actually drew (pixel census), section table, coordinate-buffer check, renderer, load mode |
 | `Esc` | Clear the pinned cell / the selection / leave selection mode |
 | `?` | Help |
 

@@ -1879,12 +1879,40 @@ export class App {
     const drawn = [...perSection.entries()]
       .sort((a, b) => b[1] - a[1])
       .map(([n, px]) => `${n} (${px.toLocaleString()} px)`);
+    // Buffer integrity: every cell of a visible single-z section must sit at that section's file
+    // z. A split (e.g. 2,630 of 5,412 cells at another z) means the coordinate array was read
+    // from the wrong bytes, not that the data has two slices.
+    const zCheck: string[] = [];
+    if (sp.sectionOf && sp.ndim === 3) {
+      const tol = Math.max(1e-6, (sp.rawMax[2] - sp.rawMin[2]) * 1e-4);
+      for (let ord = 0; ord < sp.sections.length; ord++) {
+        const sec = sp.sections[ord];
+        if (!(table.data[ord * 4 + 3] > 0) || sec.z === null || sec.z === undefined) continue;
+        let total = 0;
+        let off = 0;
+        let example = NaN;
+        for (let i = 0; i < sp.n; i++) {
+          if (sp.sectionOf[i] !== ord || !sp.valid[i]) continue;
+          total++;
+          const z = sp.xyz[i * 3 + 2] / sp.scale + sp.center[2];
+          if (Math.abs(z - sec.z) > tol) {
+            off++;
+            if (Number.isNaN(example)) example = z;
+          }
+        }
+        zCheck.push(
+          off
+            ? `${sec.name}: ${off.toLocaleString()} of ${total.toLocaleString()} cells are NOT at z ${formatValue(sec.z)} (e.g. ${formatValue(example)}) — corrupt coordinate buffer`
+            : `${sec.name}: ${total.toLocaleString()} cells all at z ${formatValue(sec.z)}`,
+        );
+      }
+    }
     const gl = this.viewer.renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     const renderer = ext
       ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))
       : String(gl.getParameter(gl.RENDERER));
-    return `Drawn: ${drawn.join(', ') || 'nothing'}${noSection ? `; no-section points ${noSection} px` : ''}. Visible per section table: ${expected.join(', ') || 'none'}. Layout ${this.store.slice('layout').mode}, DPR ${window.devicePixelRatio}, ${renderer}.`;
+    return `Drawn: ${drawn.join(', ') || 'nothing'}${noSection ? `; no-section points ${noSection} px` : ''}. Visible per section table: ${expected.join(', ') || 'none'}.${zCheck.length ? ` Buffer check — ${zCheck.join('; ')}.` : ''} Layout ${this.store.slice('layout').mode}, DPR ${window.devicePixelRatio}, ${renderer}, loaded ${this.loadInfo?.loadMode ?? 'n/a'}.`;
   }
 
   // --- export / share -----------------------------------------------------------------------------------

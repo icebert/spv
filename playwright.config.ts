@@ -1,8 +1,12 @@
 import { defineConfig } from '@playwright/test';
 
 // The E2E suite runs against the production build served at a non-root base (like GitHub Pages).
+// It builds into its own directory and listens on its own port so it never collides with a
+// developer's `npm run preview` (root base, dist/, port 4173): reusing that server would silently
+// test a stale bundle and 404 every `/spv/...` fixture URL.
 const base = process.env.VITE_BASE ?? '/spv/';
-const port = 4173;
+const port = 4174;
+const outDir = 'dist-e2e';
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -20,9 +24,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: `npm run -s build && npx vite preview --port ${port} --strictPort`,
+    command: `npx vite build --outDir ${outDir} && npx vite preview --outDir ${outDir} --port ${port} --strictPort`,
     url: `http://localhost:${port}${base}`,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 240_000,
     env: { VITE_BASE: base },
   },

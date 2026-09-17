@@ -6,6 +6,7 @@
  */
 import h5wasm from 'h5wasm';
 import type { File as H5File } from 'h5wasm';
+import { LazyRangeReader, mountLazyFile, xhrRangeFetcher, type EmNode } from './lazyFile';
 import { installPlugin, pluginNameForFilter } from './plugins';
 import {
   ReaderError,
@@ -49,16 +50,13 @@ interface EmFS {
   unlink(path: string): void;
   rmdir(path: string): void;
   analyzePath(path: string): { exists: boolean };
-  createLazyFile(
+  createFile(
     parent: string,
     name: string,
-    url: string,
+    properties: object,
     canRead: boolean,
     canWrite: boolean,
-  ): unknown;
-  lookupPath(path: string): {
-    node: { contents?: { chunks?: unknown[]; chunkSize?: number; length?: number } };
-  };
+  ): EmNode;
   filesystems: { WORKERFS?: unknown; MEMFS?: unknown };
 }
 
@@ -87,6 +85,8 @@ interface OpenState {
   mountpoint: string | null;
   loadMode: LoadMode;
   bytesTotal: number | null;
+  /** Range loader when `loadMode === 'lazy'`. */
+  lazy: LazyRangeReader | null;
   cache: MatrixCache;
   columns: Map<string, ColumnData>;
   indexAll?: string[];
@@ -126,16 +126,18 @@ function safeName(name: string): string {
 const HDF5_MAGIC = [0x89, 0x48, 0x44, 0x46, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /**
- * Async pre-flight so a bad URL never reaches Emscripten's sync XHR (which would abort the WASM):
- * a HEAD for size/range support, then a ranged GET of the first 8 bytes to confirm the HDF5
- * signature (this also catches 404 fallback pages served with status 200) and byte serving.
+ * Async pre-flight so a bad URL never reaches the worker's sync XHR: a HEAD for size/range
+ * support, then a ranged GET of the first 8 bytes to confirm the HDF5 signature (this also catches
+ * 404 fallback pages served with status 200) and byte serving. Both bypass the HTTP cache: a
+ * cached 8-byte partial response is exactly what Safari's URL-keyed cache would later hand back
+ * for other ranges of the same URL.
  */
 async function probeUrl(
   url: string,
 ): Promise<{ size: number | null; ranges: boolean; gzip: boolean }> {
   let head: Response;
   try {
-    head = await fetch(url, { method: 'HEAD' });
+    head = await fetch(url, { method: 'HEAD', cache: 'no-store' });
   } catch (err) {
     throw new ReaderError(
       `Could not reach ${url}: ${(err as Error).message}. If the file is on another host it must allow CORS.`,
@@ -145,7 +147,7 @@ async function probeUrl(
   if (head.status === 404) throw new ReaderError(`File not found (HTTP 404): ${url}`, 'missing');
   let res: Response;
   try {
-    res = await fetch(url, { headers: { Range: 'bytes=0-7' } });
+    res = await fetch(url, { headers: { Range: 'bytes=0-7' }, cache: 'no-store' });
   } catch (err) {
     throw new ReaderError(`Could not fetch ${url}: ${(err as Error).message}`, 'missing');
   }
@@ -184,8 +186,35 @@ async function probeUrl(
   return { size, ranges, gzip };
 }
 
+/**
+ * Whole-file download with a length check: a cache that ignores byte ranges can answer this with
+ * an earlier partial response, so a short body is retried once straight from the network.
+ */
 async function fetchFull(url: string, id: number, expected: number | null): Promise<Uint8Array> {
-  const res = await fetch(url);
+  const first = await fetchFullOnce(url, id, expected, 'default');
+  if (expected === null || first.length === expected) return first;
+  post({
+    event: 'log',
+    level: 'warn',
+    message: `Downloaded ${first.length} bytes but the file has ${expected}; retrying without the browser cache`,
+  });
+  const second = await fetchFullOnce(url, id, expected, 'reload');
+  if (second.length !== expected) {
+    throw new ReaderError(
+      `Downloaded ${second.length} bytes of ${url} but the file has ${expected}. The server or the browser cache returned a wrong or truncated response.`,
+      'missing',
+    );
+  }
+  return second;
+}
+
+async function fetchFullOnce(
+  url: string,
+  id: number,
+  expected: number | null,
+  cache: RequestCache,
+): Promise<Uint8Array> {
+  const res = await fetch(url, { cache });
   if (!res.ok) throw new ReaderError(`HTTP ${res.status} ${res.statusText} for ${url}`, 'missing');
   const total = expected ?? Number(res.headers.get('Content-Length') ?? 0);
   const report = progressFor(id);
@@ -248,6 +277,7 @@ async function open(id: number, source: OpenSource): Promise<OpenResult> {
   closeCurrent();
   let path: string;
   let mountpoint: string | null = null;
+  let lazy: LazyRangeReader | null = null;
   let loadMode: LoadMode;
   let bytesTotal: number | null;
   const report = progressFor(id);
@@ -262,7 +292,12 @@ async function open(id: number, source: OpenSource): Promise<OpenResult> {
     bytesTotal = probe.size;
     const wantLazy = (source.mode ?? 'auto') !== 'full';
     if (wantLazy && probe.ranges && probe.size && !probe.gzip) {
-      FS.createLazyFile('/', name, source.url, true, false);
+      lazy = new LazyRangeReader({
+        url: source.url,
+        size: probe.size,
+        fetchRange: xhrRangeFetcher(),
+      });
+      mountLazyFile(FS, '/', name, lazy);
       loadMode = 'lazy';
       report({
         stage: 'download',
@@ -317,6 +352,7 @@ async function open(id: number, source: OpenSource): Promise<OpenResult> {
     file = new h5wasm.File(path, 'r');
   } catch (err) {
     cleanupPath(FS, path, mountpoint);
+    if (err instanceof ReaderError) throw err; // e.g. a range response that failed verification
     throw new ReaderError(
       `Not a readable HDF5 file (${summarizeHdf5Error((err as Error).message)})`,
       'not-hdf5',
@@ -363,6 +399,7 @@ async function open(id: number, source: OpenSource): Promise<OpenResult> {
     mountpoint,
     loadMode,
     bytesTotal,
+    lazy,
     cache: createMatrixCache(),
     columns: new Map(),
   };
@@ -537,17 +574,8 @@ const handlers: {
     const st = state;
     const heapBytes = engine?.Module.HEAPU8.length ?? 0;
     let bytesDownloaded: number | null = st?.bytesTotal ?? null;
-    if (st && engine && st.loadMode === 'lazy') {
-      try {
-        const contents = engine.FS.lookupPath(st.path).node.contents;
-        const chunks = contents?.chunks ?? [];
-        const chunkSize = contents?.chunkSize ?? 0;
-        let n = 0;
-        for (let i = 0; i < chunks.length; i++) if (chunks[i] !== undefined) n++;
-        bytesDownloaded = Math.min(n * chunkSize, st.bytesTotal ?? Infinity);
-      } catch {
-        bytesDownloaded = null;
-      }
+    if (st && st.loadMode === 'lazy' && st.lazy) {
+      bytesDownloaded = Math.min(st.lazy.bytesDownloaded, st.bytesTotal ?? Infinity);
     }
     let csrIndexBytes = 0;
     if (st)

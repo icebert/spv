@@ -9,6 +9,7 @@ export default defineConfig(
   {
     ignores: [
       'dist/',
+      'dist-e2e/',
       'node_modules/',
       'coverage/',
       'test-results/',

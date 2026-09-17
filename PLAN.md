@@ -181,3 +181,21 @@ section transform table, image planes, selection projection and the share link
 difference to the file value; a manifest entry may carry `section_alignment` keyed by section name to
 make such corrections the default for a hosted dataset (`make_manifest.py` preserves it). The correct z
 values for the three slices have to come from the data owner.
+
+**Resolved (2026-09-17): the misplaced slices were not in the file.** The owner saw them in Safari
+only; Chromium/WebKit-via-Playwright never reproduced them. With all sections but slice13 hidden,
+Safari showed two slabs; the GPU pixel census (D key) attributed every drawn pixel to slice13, and the
+owner's screenshots showed one slab with coherent cluster structure and one with scrambled colours —
+cells drawn at other cells' coordinates. `data/demo.h5ad` has one z and one footprint per slice, so the
+coordinate array had been read from the wrong bytes. Cause: Emscripten's `FS.createLazyFile` trusts
+whatever a `Range` XHR returns, and Safari's URL cache ignores byte ranges, so a cached partial response
+for one 1 MiB chunk is replayed for another chunk of the same URL. slice13 straddles the chunk boundary
+at row 87,381, and slices 14–16 lie entirely in the following chunk, which is exactly the set of
+"wrong z" reports. Fix: `src/h5ad/lazyFile.ts` replaces the built-in loader (per-chunk URLs
+`?spv_range=from-to`, `Content-Range`/length verification, one cache-busting retry, whole-file 200
+handled by slicing, block copies instead of per-byte `get`), the pre-flight fetches use
+`cache: 'no-store'`, and the D-key report now includes a coordinate-buffer check (every cell of a
+visible single-z section at that z). The "Shown at z" / `section_alignment` mechanism stays available
+for genuinely misregistered data but is not needed for the demo. Also fixed on the way: the E2E suite
+now builds to `dist-e2e/` on port 4174 instead of reusing a developer's preview server on 4173, which
+had made the suite test a stale bundle.

@@ -7,3 +7,4 @@ test-results/
 playwright-report/
 package-lock.json
 *.md
+dist-e2e/

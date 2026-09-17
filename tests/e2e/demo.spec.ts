@@ -147,6 +147,27 @@ test.describe('demo dataset', () => {
     expect(text).toContain('seurat_clusters');
   });
 
+  test('lazy loading keys every range request by URL and the coordinate buffer is intact', async ({
+    page,
+  }) => {
+    const ranges: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('spv_range=')) ranges.push(r.url());
+    });
+    // the state from the Safari report: only slice13 shown
+    await page.goto('#dataset=demo&hs=0-11%2C13-15&c=obs%3Aseurat_clusters');
+    await waitReady(page);
+    expect(ranges.length).toBeGreaterThan(0);
+    for (const u of ranges) expect(u).toMatch(/[?&]spv_range=\d+-\d+$/);
+    expect(new Set(ranges).size).toBe(ranges.length); // one URL per chunk, never re-requested
+    await page.evaluate(() => window.__spv.app.viewer.render());
+    const report: string = await page.evaluate(() => window.__spv.app.drawnSectionsReport());
+    expect(report).toContain('Drawn: slice13');
+    expect(report).toContain('slice13: 5,412 cells all at z 558');
+    expect(report).not.toContain('corrupt');
+    expect(report).toContain('loaded lazy');
+  });
+
   test('share link restores layout, colour and camera', async ({ page, context }) => {
     await page.goto('#dataset=demo');
     await waitReady(page);
