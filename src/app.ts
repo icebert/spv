@@ -1842,8 +1842,10 @@ export class App {
       }
     }
     const fields: [string, string][] = [];
+    const libraryColumn = this.summary?.library.column ?? null;
     for (const f of this.store.slice('ui').tooltipFields) {
-      if (f === colorLabel) continue;
+      // the colour value and the section name already have their own rows
+      if (f === colorLabel || (f === libraryColumn && section !== null)) continue;
       try {
         const col = await this.column(f);
         if (col.kind === 'categorical') {

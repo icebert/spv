@@ -125,6 +125,28 @@ test.describe('demo dataset', () => {
     await page.waitForFunction(() => location.hash.includes('hs=0'));
   });
 
+  test('hover tooltip names the section once, with the colour value and extra fields', async ({
+    page,
+  }) => {
+    await page.goto('#dataset=demo&hs=0-11%2C13-15');
+    await waitReady(page);
+    const canvas = page.locator('.spv-viewport canvas').first();
+    const box = (await canvas.boundingBox())!;
+    // sweep the mouse across the middle of the view until a cell is under the cursor
+    let text = '';
+    for (let k = 0; k < 40 && !text; k++) {
+      await page.mouse.move(box.x + box.width * (0.3 + 0.01 * k), box.y + box.height * 0.5);
+      await page.waitForTimeout(60);
+      text = await page
+        .locator('.spv-tooltip')
+        .evaluate((el) => (el.style.display === 'none' ? '' : (el.textContent ?? '')));
+    }
+    expect(text).toContain('section');
+    expect(text).toContain('slice13');
+    expect(text.match(/slice13/g)?.length).toBe(1);
+    expect(text).toContain('seurat_clusters');
+  });
+
   test('share link restores layout, colour and camera', async ({ page, context }) => {
     await page.goto('#dataset=demo');
     await waitReady(page);

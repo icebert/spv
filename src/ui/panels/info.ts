@@ -14,6 +14,7 @@ export function infoPanel(app: App): Panel {
     const sp = app.spatial;
     const fields = app.store.slice('ui').tooltipFields;
     const cols = s.obs.columns.filter((c) => c.kind !== 'unsupported');
+    const lib = s.library.column;
     root.appendChild(
       group(
         'Tooltip fields (up to 6)',
@@ -21,10 +22,14 @@ export function infoPanel(app: App): Panel {
           'div',
           { style: 'max-height:180px;overflow:auto' },
           ...cols.map((c) =>
-            checkbox(c.name, fields.includes(c.name), (v) => {
-              const next = v ? [...fields, c.name].slice(-6) : fields.filter((f) => f !== c.name);
-              app.store.update('ui', { tooltipFields: next });
-            }),
+            checkbox(
+              c.name === lib ? `${c.name} (shown as the section row)` : c.name,
+              fields.includes(c.name),
+              (v) => {
+                const next = v ? [...fields, c.name].slice(-6) : fields.filter((f) => f !== c.name);
+                app.store.update('ui', { tooltipFields: next });
+              },
+            ),
           ),
         ),
       ),
