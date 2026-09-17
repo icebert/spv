@@ -87,3 +87,24 @@ from `scripts/inspect_h5ad.py` (output in `data/demo.meta.json`), not from assum
 python scripts/prepare_h5ad.py data/demo.h5ad data/demo.csc.h5ad --csc --float32 --compression gzip --level 4
 ```
 Would make gene switching an `indptr` slice instead of a full `indices` scan and halve `X/data`.
+
+## 7. Phase 2 findings (reader + worker, verified on `data/demo.h5ad` in headless Chromium)
+
+- **anndata ≥ 0.11 `nullable-string-array`**: current anndata writes the `obs`/`var` index and plain string
+  columns as groups (`values` + `mask`, attr `na-value`) — not in the spec's encoding list. Supported in
+  `readStringArray`; the demo itself (older writer) uses plain `string-array` datasets. Both are tested.
+- **h5wasm quirks handled**: failed `File` open does not throw (returns `file_id = -1`); failed hyperslab
+  reads (e.g. missing compression plugin) silently return garbage unless
+  `Module.activate_throwing_error_handler()` is on — the worker always enables it. Booleans arrive as
+  enum datasets (`dtype "unknown"`, members FALSE/TRUE); int64 as `BigInt64Array`; sparse `shape` attrs as
+  BigInt arrays; legacy `categories` attrs as a one-element `Reference` array. Empty `column-order` comes back
+  as `Float64Array(0)`.
+- **Remote loading**: `probeUrl` does a HEAD, then a ranged GET of the first 8 bytes to verify the HDF5
+  signature (catches 404 fallback pages served with 200) and byte-range support, before
+  `FS.createLazyFile`. Lazy mode on the demo downloaded 20 of 24 MB because gene coloring needs all of
+  `X` (CSR); metadata + coordinates alone touch ~3 MB.
+- **Measured (production build, local preview, M-series laptop)**: engine start 29 ms; open + summary
+  ~360 ms; coordinates + section model 54 ms; first gene on CSR (builds the 70 MB column index)
+  0.9 s; next gene 20 ms. Local file via WORKERFS: identical numbers, no copy into WASM memory.
+- Fixture `lzf.h5` (h5py's built-in LZF filter) covers the plugin path in Node via
+  `install_local_plugins`; the browser path uses `?url` asset imports (`src/h5ad/plugins.ts`).

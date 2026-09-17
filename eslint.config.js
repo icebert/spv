@@ -15,6 +15,7 @@ export default defineConfig(
       'playwright-report/',
       '.venv/',
       'data/',
+      '.scratch/',
     ],
   },
   js.configs.recommended,

@@ -21,6 +21,7 @@ Fixtures (tests/fixtures/):
   legacy.h5ad     hand-written with h5py in the anndata < 0.8 layout: X with h5sparse_format attrs,
                   obs categorical as codes + __categories reference, fixed-length byte index,
                   obsm/X_spatial as the coordinate key.
+  lzf.h5          LZF-compressed dataset (plugin path test).
   notanndata.h5   a plain HDF5 file (error-path test).
 
 Run: python scripts/make_fixtures.py [--out tests/fixtures]
@@ -92,6 +93,8 @@ def expected_for(adata: ad.AnnData, genes: list[str] | None = None, **extra) -> 
                     "nnz": int(adata.X.nnz) if sp.issparse(adata.X) else int(np.count_nonzero(adata.X)),
                     "genes": {g: dense_col(adata.X, list(adata.var_names).index(g)) for g in genes}}
     for name, L in adata.layers.items():
+        if name is None:  # anndata ≥ 0.13 also yields X under the key None
+            continue
         fmt = "csr" if sp.isspmatrix_csr(L) else "csc" if sp.isspmatrix_csc(L) else "dense"
         exp["layers"][name] = {"format": fmt, "dtype": str(L.dtype),
                                "genes": {g: dense_col(L, list(adata.var_names).index(g)) for g in genes}}
@@ -366,6 +369,15 @@ def make_legacy(out: str) -> None:
     print(f"{'legacy':<12} {os.path.getsize(path) / 1024:7.1f} kB  (h5py hand-written)")
 
 
+def make_lzf(out: str) -> None:
+    """Dataset compressed with LZF (h5py ships the filter) — exercises the h5wasm-plugins path."""
+    path = os.path.join(out, "lzf.h5")
+    with h5py.File(path, "w") as f:
+        f.create_dataset("data", data=(np.arange(1000) % 7).astype(np.float32), chunks=(100,), compression="lzf")
+        f.create_dataset("plain", data=np.array([1, 2, 3], dtype=np.int32))
+    print(f"{'lzf':<12} {os.path.getsize(path) / 1024:7.1f} kB  (lzf-compressed, needs plugin)")
+
+
 def make_notanndata(out: str) -> None:
     path = os.path.join(out, "notanndata.h5")
     with h5py.File(path, "w") as f:
@@ -379,7 +391,7 @@ def main() -> None:
     ap.add_argument("--out", default=os.path.join("tests", "fixtures"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for fn in (make_dense, make_csr, make_csc, make_nox, make_visium2, make_demo_like, make_legacy, make_notanndata):
+    for fn in (make_dense, make_csr, make_csc, make_nox, make_visium2, make_demo_like, make_legacy, make_lzf, make_notanndata):
         fn(args.out)
     big = [f for f in os.listdir(args.out) if os.path.getsize(os.path.join(args.out, f)) > 100 * 1024]
     if big:

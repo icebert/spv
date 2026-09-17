@@ -103,6 +103,7 @@ function serveDataDir(): Plugin {
 export default defineConfig({
   base: BASE,
   plugins: [serveDataDir()],
+  assetsInclude: ['**/*.so'],
   build: {
     target: 'es2022',
     sourcemap: false,
