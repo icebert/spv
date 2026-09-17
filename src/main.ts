@@ -81,6 +81,8 @@ function main(): void {
       total: app.sections.filter((s) => s.hasImage).length,
       bytes: app.planes?.totalBytes() ?? 0,
     },
+    graph: app.graphStatus,
+    alignment: app.store.slice('layout').alignment,
     renderer: app.viewer.info(),
     loadInfo: app.loadInfo,
     summary: app.summary

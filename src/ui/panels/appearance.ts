@@ -1,6 +1,6 @@
 import type { App } from '../../app';
 import type { SizeMode, SpriteShape } from '../../render/points';
-import { button, checkbox, clear, el, group, note, radio, slider } from '../dom';
+import { button, checkbox, clear, el, fmtInt, group, note, radio, select, slider } from '../dom';
 import type { Panel } from '../sidebar';
 
 export function appearancePanel(app: App): Panel {
@@ -123,14 +123,74 @@ export function appearancePanel(app: App): Panel {
         ),
       ),
     );
+    const graph = renderGraph();
+    if (graph) root.appendChild(graph);
+  };
+  const renderGraph = (): HTMLElement | null => {
+    const keys = app.graphKeys();
+    if (!keys.length) return null;
+    const g = app.store.slice('graph');
+    const st = app.graphStatus;
+    const color = el('input', { type: 'color', value: g.color, title: 'Edge colour' });
+    color.addEventListener('input', () => app.store.update('graph', { color: color.value }));
+    const cap = el('input', {
+      type: 'number',
+      className: 'spv-input',
+      min: '1000',
+      step: '10000',
+      value: String(g.maxEdges),
+      style: 'width:110px',
+    });
+    cap.addEventListener('change', () =>
+      app.store.update('graph', { maxEdges: Math.max(1000, Number(cap.value) || 1_000_000) }),
+    );
+    return group(
+      'Spatial graph (obsp)',
+      checkbox('Show spatial graph edges', g.enabled, (v) =>
+        app.store.update('graph', { enabled: v }),
+      ),
+      el(
+        'div',
+        'spv-row',
+        el('span', 'spv-slider-label', 'Graph'),
+        select(
+          keys.map((k) => ({ value: k, label: k })),
+          g.key && keys.includes(g.key) ? g.key : keys[0],
+          (v) => app.store.update('graph', { key: v }),
+        ),
+      ),
+      el(
+        'div',
+        'spv-row',
+        el('span', 'spv-slider-label', 'Edge colour'),
+        color,
+        el('span', 'spv-slider-label', 'Max edges'),
+        cap,
+      ),
+      slider({
+        label: 'Edge opacity',
+        min: 0.02,
+        max: 1,
+        step: 0.01,
+        value: g.opacity,
+        format: (v) => `${Math.round(v * 100)}%`,
+        onInput: (v) => app.store.update('graph', { opacity: v }),
+      }).el,
+      st
+        ? note(
+            `${fmtInt(st.nEdges)} edges shown${st.subsampled ? ` (uniformly subsampled from ${fmtInt(st.nTotal)})` : ''}; edges follow the section, clip, category and subsample filters.`,
+          )
+        : null,
+    );
   };
   const preset = (v: 'top' | 'front' | 'side' | 'iso') => {
     app.viewer.rig.preset(v);
     app.viewer.requestRender();
   };
   app.store.on('appearance', render);
+  app.store.on('graph', render);
   app.on((e) => {
-    if (e.type === 'dataset') render();
+    if (e.type === 'dataset' || e.type === 'sections') render();
   });
   render();
   return { id: 'appearance', title: 'Appearance', el: root };

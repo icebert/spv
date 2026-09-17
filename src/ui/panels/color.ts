@@ -168,6 +168,44 @@ export function colorPanel(app: App): Panel {
         ),
       );
     }
+    if (s.uns.moranI) {
+      const det = el(
+        'details',
+        null,
+        el(
+          'summary',
+          { style: 'cursor:pointer;color:var(--spv-muted)' },
+          `Top spatially variable genes (uns/moranI, ${s.uns.moranI.n})`,
+        ),
+      );
+      const list = el('div', { style: 'max-height:220px;overflow:auto;font-size:12px' });
+      det.appendChild(list);
+      det.addEventListener('toggle', () => {
+        if (!det.open || list.childElementCount) return;
+        void app.moranI().then((rows) => {
+          clear(list);
+          if (!rows || !rows.length) {
+            list.appendChild(note('moranI has no genes matching the var names.'));
+            return;
+          }
+          for (const r of rows.slice(0, 50)) {
+            list.appendChild(
+              el(
+                'div',
+                {
+                  className: 'spv-legend-row',
+                  title: `Moran's I = ${r.I.toFixed(4)}`,
+                  onClick: () => pick(r.name),
+                },
+                el('span', null, r.name),
+                el('span', 'spv-count', r.I.toFixed(3)),
+              ),
+            );
+          }
+        });
+      });
+      geneBox.appendChild(det);
+    }
     if (app.currentEntry?.example_genes?.length) {
       geneBox.appendChild(
         el(

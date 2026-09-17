@@ -27,6 +27,15 @@ export interface CoordsState {
   zScale: number;
 }
 
+/** Manual per-section alignment in raw file units and degrees (nice-to-have §7.3-1). */
+export interface AlignmentState {
+  dx: number;
+  dy: number;
+  rot: number;
+  fx: boolean;
+  fy: boolean;
+}
+
 export interface LayoutState {
   mode: LayoutMode;
   spacing: number;
@@ -38,6 +47,9 @@ export interface LayoutState {
   dimOthers: boolean;
   playing: boolean;
   playFps: number;
+  /** ordinal → alignment */
+  alignment: Record<number, AlignmentState>;
+  crossfade: boolean;
 }
 
 export interface ImagesState {
@@ -90,6 +102,15 @@ export interface AppearanceState {
   turntable: boolean;
 }
 
+export interface GraphState {
+  enabled: boolean;
+  /** obsp key, null = first *_connectivities */
+  key: string | null;
+  color: string;
+  opacity: number;
+  maxEdges: number;
+}
+
 export interface UiState {
   sidebar: boolean;
   tab: string;
@@ -105,6 +126,7 @@ export interface ViewerState extends Record<string, object> {
   color: ColorState;
   filter: FilterState;
   appearance: AppearanceState;
+  graph: GraphState;
   ui: UiState;
 }
 
@@ -135,6 +157,8 @@ export function defaultState(): ViewerState {
       dimOthers: false,
       playing: false,
       playFps: 2,
+      alignment: {},
+      crossfade: true,
     },
     images: { enabled: true, opacity: 1, resolution: 'auto', grayscale: false },
     color: {
@@ -167,6 +191,7 @@ export function defaultState(): ViewerState {
       ortho: false,
       turntable: false,
     },
+    graph: { enabled: false, key: null, color: '#9ca3af', opacity: 0.35, maxEdges: 1_000_000 },
     ui: { sidebar: true, tab: 'dataset', tooltipFields: [], camera: null },
   };
 }

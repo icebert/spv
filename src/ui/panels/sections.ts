@@ -28,10 +28,12 @@ export function sectionsPanel(app: App): Panel {
   const stepperBox = el('div');
   const listBox = el('div');
   const imagesBox = el('div');
+  const alignBox = el('div');
   root.append(
     group('Layout', layoutBox),
     group('Section stepper', stepperBox),
     group('Sections', listBox),
+    group('Align current section', alignBox),
     group('Tissue images', imagesBox),
   );
 
@@ -136,6 +138,15 @@ export function sectionsPanel(app: App): Panel {
       stepperBox.appendChild(
         checkbox('Highlight current section (dim others)', l.dimOthers, (v) =>
           app.store.update('layout', { dimOthers: v }),
+        ),
+      );
+    else
+      stepperBox.appendChild(
+        checkbox(
+          'Crossfade between sections',
+          l.crossfade,
+          (v) => app.store.update('layout', { crossfade: v }),
+          'Short opacity blend when stepping (flip-book)',
         ),
       );
   };
@@ -315,7 +326,73 @@ export function sectionsPanel(app: App): Panel {
       );
   };
 
+  const renderAlign = () => {
+    clear(alignBox);
+    const cur = app.currentSection;
+    const sp = app.spatial;
+    if (!cur || !sp || app.sections.length < 2) {
+      alignBox.appendChild(
+        note('Pick a section (stepper or list) to nudge it into register with its neighbours.'),
+      );
+      return;
+    }
+    const a = app.store.slice('layout').alignment[cur.ordinal] ?? {
+      dx: 0,
+      dy: 0,
+      rot: 0,
+      fx: false,
+      fy: false,
+    };
+    const extent = Math.max(sp.rawMax[0] - sp.rawMin[0], sp.rawMax[1] - sp.rawMin[1]) || 1;
+    const step = Number((extent / 200).toPrecision(2));
+    const num = (label: string, value: number, key: 'dx' | 'dy' | 'rot', st: number) => {
+      const input = el('input', {
+        type: 'number',
+        className: 'spv-input',
+        step: String(st),
+        value: String(Number(value.toPrecision(6))),
+      });
+      input.addEventListener('change', () =>
+        app.setAlignment(cur.ordinal, { [key]: Number(input.value) || 0 }),
+      );
+      return el(
+        'div',
+        'spv-row',
+        el('span', 'spv-slider-label', label),
+        input,
+        button('−', () => app.setAlignment(cur.ordinal, { [key]: (a[key] as number) - st }), {
+          className: 'spv-small',
+        }),
+        button('+', () => app.setAlignment(cur.ordinal, { [key]: (a[key] as number) + st }), {
+          className: 'spv-small',
+        }),
+      );
+    };
+    alignBox.append(
+      el(
+        'div',
+        { style: 'font-size:12px;color:var(--spv-muted)' },
+        `${cur.name} — offsets in file units, rotation in degrees about the section centre`,
+      ),
+      num('X offset', a.dx, 'dx', step),
+      num('Y offset', a.dy, 'dy', step),
+      num('Rotation', a.rot, 'rot', 1),
+      el(
+        'div',
+        'spv-row',
+        checkbox('Flip X', a.fx, (v) => app.setAlignment(cur.ordinal, { fx: v })),
+        checkbox('Flip Y', a.fy, (v) => app.setAlignment(cur.ordinal, { fy: v })),
+        button('Reset', () => app.resetAlignment(cur.ordinal), { className: 'spv-small' }),
+        button('Reset all', () => app.resetAlignment(), { className: 'spv-small' }),
+      ),
+      note(
+        'Alignment is stored in the share link. Compare neighbouring sections in Single or Tile mode with a small point size.',
+      ),
+    );
+  };
+
   const renderAll = () => {
+    renderAlign();
     renderLayout();
     renderStepper();
     renderList();

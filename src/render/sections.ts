@@ -293,6 +293,14 @@ export class SectionTable {
     return res;
   }
 
+  /** Overwrite one section's alpha (used by the Single-mode crossfade). */
+  setAlpha(ordinal: number, alpha: number): void {
+    if (ordinal < 0 || ordinal >= this.geoms.length) return;
+    this.data[ordinal * 4 + 3] = alpha;
+    if (this.lastResult) this.lastResult.offsets[ordinal].alpha = alpha;
+    this.texture.needsUpdate = true;
+  }
+
   dispose(): void {
     this.texture.dispose();
   }

@@ -5,7 +5,7 @@
 import { COLORMAP_NAMES, type ColormapName } from '../color/colormaps';
 import type { ColumnRef } from '../h5ad/types';
 import { LAYOUT_MODES, type LayoutMode } from '../render/sections';
-import { defaultState, type ViewerState } from './viewerState';
+import { defaultState, type AlignmentState, type ViewerState } from './viewerState';
 
 export const URL_STATE_VERSION = 1;
 
@@ -92,6 +92,20 @@ export function serializeState(s: ViewerState): string {
   if (l.current !== d.layout.current) p.set('cur', String(l.current));
   if (l.hidden.length) p.set('hs', encodeIndexList(l.hidden));
   if (l.dimOthers) p.set('dim', '1');
+  if (!l.crossfade) p.set('cf', '0');
+  const al = Object.entries(l.alignment)
+    .filter(([, a]) => a.dx !== 0 || a.dy !== 0 || a.rot !== 0 || a.fx || a.fy)
+    .map(
+      ([k, a]) =>
+        `${k}:${num(a.dx)},${num(a.dy)},${num(a.rot, 2)},${a.fx ? 'x' : ''}${a.fy ? 'y' : ''}`,
+    );
+  if (al.length) p.set('al', al.join(';'));
+  // graph overlay
+  const g = s.graph;
+  if (g.enabled) p.set('gr', g.key ?? '*');
+  if (g.color !== d.graph.color) p.set('gc', g.color.replace('#', ''));
+  if (g.opacity !== d.graph.opacity) p.set('go', num(g.opacity, 2));
+  if (g.maxEdges !== d.graph.maxEdges) p.set('ge', String(g.maxEdges));
   // images
   const im = s.images;
   if (!im.enabled) p.set('img', '0');
@@ -176,6 +190,29 @@ export function parseState(hash: string): { state: ViewerState; version: number 
   if (p.has('cur')) s.layout.current = Math.max(0, Number(p.get('cur')) || 0);
   if (p.has('hs')) s.layout.hidden = decodeIndexList(p.get('hs')!);
   s.layout.dimOthers = p.get('dim') === '1';
+  s.layout.crossfade = p.get('cf') !== '0';
+  if (p.has('al')) {
+    const alignment: Record<number, AlignmentState> = {};
+    for (const part of p.get('al')!.split(';')) {
+      const m = /^(\d+):(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),([xy]*)$/.exec(part);
+      if (!m) continue;
+      alignment[Number(m[1])] = {
+        dx: Number(m[2]),
+        dy: Number(m[3]),
+        rot: Number(m[4]),
+        fx: m[5].includes('x'),
+        fy: m[5].includes('y'),
+      };
+    }
+    s.layout.alignment = alignment;
+  }
+  if (p.has('gr')) {
+    s.graph.enabled = true;
+    s.graph.key = p.get('gr') === '*' ? null : p.get('gr');
+  }
+  if (p.has('gc') && /^[0-9a-f]{6}$/i.test(p.get('gc')!)) s.graph.color = `#${p.get('gc')}`;
+  if (p.has('go')) s.graph.opacity = Number(p.get('go'));
+  if (p.has('ge')) s.graph.maxEdges = Number(p.get('ge')) || s.graph.maxEdges;
   if (p.get('img') === '0') s.images.enabled = false;
   if (p.has('io')) s.images.opacity = Number(p.get('io'));
   const ir = p.get('ir');

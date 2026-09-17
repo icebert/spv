@@ -12,11 +12,13 @@ import type {
   ColumnData,
   CoordinateSpec,
   GeneVector,
+  MoranI,
   ProgressEvent,
   SectionInfo,
   SpatialData,
   Summary,
 } from './h5ad/types';
+import { EdgeCloud } from './render/edges';
 import { ImagePlanes, IMAGE_TEXTURE_BUDGET } from './render/imagePlanes';
 import { PointCloud } from './render/points';
 import { Viewer } from './render/scene';
@@ -172,6 +174,14 @@ export class App {
   private scalarQuantiles: Float64Array | null = null;
   private scalarLabel = '';
   private frame: DisplayFrame = { flipX: false, flipY: false, flipZ: false, swapYZ: false };
+  edges: EdgeCloud | null = null;
+  graphStatus: { key: string; nEdges: number; nTotal: number; subsampled: boolean } | null = null;
+  private graphToken = 0;
+  private currentCodes: Int32Array | null = null;
+  private lastCurrent = -1;
+  private lastMode: string | null = null;
+  private fadeToken = 0;
+  private moranPromise: Promise<MoranI | null> | null = null;
 
   constructor(viewport: HTMLElement, base: string) {
     this.base = base;
@@ -212,6 +222,7 @@ export class App {
       if (v.geneNameColumn !== prev.geneNameColumn) void this.loadVarNames();
     });
     s.on('filter', () => this.applyFilter());
+    s.on('graph', () => void this.applyGraph());
     s.on('images', (v, prev) => {
       if (v.resolution !== prev.resolution) this.resetImages();
       this.applyImages();
@@ -329,6 +340,13 @@ export class App {
       this.planes.dispose();
       this.planes = null;
     }
+    this.disposeEdges();
+    this.graphToken++;
+    this.fadeToken++;
+    this.currentCodes = null;
+    this.lastCurrent = -1;
+    this.lastMode = null;
+    this.moranPromise = null;
     this.viewer.setPointCloud(null);
     this.pc = null;
     this.table?.dispose();
@@ -580,6 +598,7 @@ export class App {
     this.prevPlanar = false;
     this.applyLayout(true);
     this.emit({ type: 'sections' });
+    void this.applyGraph();
   }
 
   private async reloadSpatial(): Promise<void> {
@@ -638,7 +657,7 @@ export class App {
       dimOthers: l.dimOthers && l.mode !== 'single',
       dimAlpha: DIM_ALPHA,
       hidden: new Set(l.hidden),
-      alignment: new Map(),
+      alignment: this.alignmentMap(l.alignment),
     };
   }
 
@@ -668,6 +687,21 @@ export class App {
     }
     this.prevPlanar = res.planar;
     this.viewer.setBounds(res.bounds, fit, res.planar ? 'top' : 'iso', res.planar);
+    const l = this.store.slice('layout');
+    if (
+      l.mode === 'single' &&
+      this.lastMode === 'single' &&
+      l.crossfade &&
+      this.lastCurrent >= 0 &&
+      this.lastCurrent !== l.current &&
+      !l.hidden.includes(this.lastCurrent)
+    ) {
+      this.startCrossfade(this.lastCurrent, l.current);
+    } else {
+      this.fadeToken++;
+    }
+    this.lastCurrent = l.current;
+    this.lastMode = l.mode;
     this.updatePlanes();
     this.emit({ type: 'sections' });
     this.emit({ type: 'counts' });
@@ -873,6 +907,10 @@ export class App {
     const pc = this.pc;
     if (!pc || !this.summary) return;
     try {
+      if (c.source !== 'obs' || !c.key) {
+        this.currentCodes = null;
+        this.edges?.setCodes(null);
+      }
       if (c.source === 'none' || !c.key) {
         pc.setColorMode('uniform');
         this.legend = null;
@@ -908,6 +946,8 @@ export class App {
           this.colorbar = null;
           this.scalarValues = null;
           this.scalarQuantiles = null;
+          this.currentCodes = col.codes;
+          this.edges?.setCodes(col.codes);
           pc.setCodes(col.codes);
           pc.setPalette(
             colors,
@@ -1067,6 +1107,7 @@ export class App {
     void this.buildMask(f).then((mask) => {
       if (this.pc !== pc) return;
       pc.setUserMask(mask);
+      this.edges?.setUserMask(mask);
       this.emit({ type: 'counts' });
       this.viewer.requestRender();
     });
@@ -1243,6 +1284,155 @@ export class App {
       }
       this.emit({ type: 'images', ordinal: s.ordinal });
     }
+  }
+
+  // --- alignment / crossfade / graph / moranI (nice-to-haves) -------------------------------------------
+  /** Raw-unit alignment state → unit-cube display-frame alignment for the section table. */
+  private alignmentMap(
+    al: ViewerState['layout']['alignment'],
+  ): Map<number, { dx: number; dy: number; rotation: number; flipX: boolean; flipY: boolean }> {
+    const m = new Map<
+      number,
+      { dx: number; dy: number; rotation: number; flipX: boolean; flipY: boolean }
+    >();
+    const scale = this.spatial?.scale ?? 1;
+    const sx = this.frame.flipX ? -1 : 1;
+    const sy = this.frame.flipY ? -1 : 1;
+    for (const [k, a] of Object.entries(al)) {
+      if (a.dx === 0 && a.dy === 0 && a.rot === 0 && !a.fx && !a.fy) continue;
+      m.set(Number(k), {
+        dx: a.dx * scale * sx,
+        dy: a.dy * scale * sy,
+        rotation: (a.rot * Math.PI) / 180,
+        flipX: a.fx,
+        flipY: a.fy,
+      });
+    }
+    return m;
+  }
+
+  setAlignment(ordinal: number, patch: Partial<ViewerState['layout']['alignment'][number]>): void {
+    const cur = this.store.slice('layout').alignment;
+    const prev = cur[ordinal] ?? { dx: 0, dy: 0, rot: 0, fx: false, fy: false };
+    this.store.update('layout', { alignment: { ...cur, [ordinal]: { ...prev, ...patch } } });
+  }
+
+  resetAlignment(ordinal?: number): void {
+    if (ordinal === undefined) {
+      this.store.update('layout', { alignment: {} });
+      return;
+    }
+    const next = { ...this.store.slice('layout').alignment };
+    delete next[ordinal];
+    this.store.update('layout', { alignment: next });
+  }
+
+  /** Short opacity blend between consecutive sections in Single mode (flip-book feel). */
+  private startCrossfade(from: number, to: number, ms = 220): void {
+    const token = ++this.fadeToken;
+    const table = this.table;
+    if (!table) return;
+    const t0 = performance.now();
+    const tick = () => {
+      if (token !== this.fadeToken || this.table !== table) return;
+      const t = Math.min(1, (performance.now() - t0) / ms);
+      const e = t * t * (3 - 2 * t);
+      table.setAlpha(from, 1 - e);
+      table.setAlpha(to, e);
+      this.updatePlanes();
+      this.viewer.requestRender();
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  private disposeEdges(): void {
+    if (!this.edges) return;
+    this.viewer.scene.remove(this.edges.object);
+    this.edges.dispose();
+    this.edges = null;
+    this.graphStatus = null;
+  }
+
+  graphKeys(): string[] {
+    return Object.entries(this.summary?.obsp ?? {})
+      .filter(([k, m]) => m && k.endsWith('_connectivities'))
+      .map(([k]) => k);
+  }
+
+  async applyGraph(): Promise<void> {
+    const g = this.store.slice('graph');
+    const token = ++this.graphToken;
+    if (!g.enabled || !this.pc || !this.spatial || !this.client) {
+      this.disposeEdges();
+      this.emit({ type: 'sections' });
+      return;
+    }
+    const keys = this.graphKeys();
+    const key = g.key && keys.includes(g.key) ? g.key : keys[0];
+    if (!key) {
+      this.disposeEdges();
+      this.notice('This file has no obsp/*_connectivities graph.', 'info');
+      return;
+    }
+    if (
+      this.edges &&
+      this.graphStatus?.key === key &&
+      this.graphStatus.nEdges === Math.min(this.graphStatus.nTotal, g.maxEdges)
+    ) {
+      this.edges.setStyle(g.color, g.opacity);
+      this.viewer.requestRender();
+      return;
+    }
+    try {
+      const res = await this.client.call(
+        'getGraphEdges',
+        { key, maxEdges: g.maxEdges },
+        { onProgress: (p) => this.emit({ type: 'progress', progress: p }) },
+      );
+      this.emit({ type: 'progress', progress: null });
+      if (token !== this.graphToken || !this.pc || !this.spatial) return;
+      if (!this.edges) {
+        this.edges = new EdgeCloud(this.pc.uniforms);
+        this.viewer.scene.add(this.edges.object);
+      }
+      this.edges.setEdges(
+        res.pairs,
+        res.nEdges,
+        this.spatial.xyz,
+        this.spatial.sectionOf,
+        this.spatial.valid,
+      );
+      this.edges.setCodes(this.currentCodes);
+      this.edges.setUserMask(this.pc.getUserMask());
+      this.edges.setStyle(g.color, g.opacity);
+      this.graphStatus = {
+        key,
+        nEdges: res.nEdges,
+        nTotal: res.nTotal,
+        subsampled: res.subsampled,
+      };
+      this.viewer.requestRender();
+      this.emit({ type: 'sections' });
+    } catch (err) {
+      if (token !== this.graphToken) return;
+      this.emit({ type: 'progress', progress: null });
+      this.notice(`Could not load the spatial graph: ${this.describeError(err as Error)}`, 'error');
+    }
+  }
+
+  /** `uns/moranI` sorted by I (descending), or null. Cached per dataset. */
+  moranI(): Promise<{ name: string; I: number }[] | null> {
+    if (!this.client || !this.summary?.uns.moranI) return Promise.resolve(null);
+    this.moranPromise ??= this.client.call('getMoranI', null);
+    return this.moranPromise.then((m) => {
+      if (!m) return null;
+      const names = new Set(this.varDisplay);
+      return m.genes
+        .map((name, i) => ({ name, I: m.I[i] }))
+        .filter((g) => Number.isFinite(g.I) && names.has(g.name))
+        .sort((a, b) => b.I - a.I);
+    });
   }
 
   // --- picking / tooltip ------------------------------------------------------------------------------

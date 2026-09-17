@@ -249,6 +249,71 @@ test.describe('fixtures', () => {
   });
 });
 
+test.describe('nice-to-haves', () => {
+  test('spatial graph overlay loads from obsp, honours the edge cap and custom keys', async ({
+    page,
+  }) => {
+    await page.goto(fixtureUrl('visium2.h5ad'));
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Appearance' }).click();
+    await page.getByText('Show spatial graph edges').click();
+    await page.waitForFunction(() => window.__spv.info().graph !== null, null, { timeout: 60_000 });
+    let g = (await info(page)).graph;
+    expect(g.key).toBe('custom_connectivities'); // first *_connectivities key alphabetically
+    expect(g.nEdges).toBe(g.nTotal);
+    await page.evaluate(() =>
+      window.__spv.app.store.update('graph', { key: 'spatial_connectivities', maxEdges: 1000 }),
+    );
+    await page.waitForFunction(() => window.__spv.info().graph?.key === 'spatial_connectivities');
+    g = (await info(page)).graph;
+    expect(g.nEdges).toBe(76); // 60 spots × 2 nearest neighbours, symmetrised and deduplicated
+    expect(g.subsampled).toBe(false);
+    await page.waitForFunction(() => location.hash.includes('gr=spatial_connectivities'));
+    await shot(page, 'graph');
+    await page.evaluate(() => window.__spv.app.store.update('graph', { enabled: false }));
+    await page.waitForFunction(() => window.__spv.info().graph === null);
+  });
+
+  test('manual alignment moves a section, survives the share link, and can be reset', async ({
+    page,
+    context,
+  }) => {
+    await page.goto(fixtureUrl('visium2.h5ad'));
+    await waitReady(page);
+    await page.evaluate(() => {
+      window.__spv.app.store.update('layout', { mode: 'tile' });
+      window.__spv.app.setAlignment(1, { dx: 20, dy: -10, rot: 15, fx: true, fy: false });
+    });
+    await page.waitForFunction(() => location.hash.includes('al='));
+    const link: string = await page.evaluate(() => window.__spv.app.shareLink());
+    const page2 = await context.newPage();
+    await page2.goto(link);
+    await waitReady(page2);
+    const al = (await info(page2)).alignment;
+    expect(al['1']).toEqual({ dx: 20, dy: -10, rot: 15, fx: true, fy: false });
+    await page2.evaluate(() => window.__spv.app.resetAlignment());
+    expect((await info(page2)).alignment).toEqual({});
+  });
+
+  test("Moran's I list is offered when uns/moranI exists and colours by the picked gene", async ({
+    page,
+  }) => {
+    await page.goto(fixtureUrl('visium2.h5ad'));
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Color' }).click();
+    await page.click('summary:has-text("Top spatially variable")');
+    const rows = page.locator('.spv-panel.spv-active details .spv-legend-row');
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBe(10);
+    const gene = ((await rows.first().locator('span').first().textContent()) ?? '').trim();
+    await rows.first().click();
+    await page.waitForFunction((g) => window.__spv.info().colorbar?.label === g, gene, {
+      timeout: 30_000,
+    });
+    expect((await info(page)).color.source).toBe('gene');
+  });
+});
+
 const synthetic = path.join(ROOT, 'data/synthetic/synthetic_40k.h5ad');
 test.describe('native 3-D synthetic dataset', () => {
   test.skip(!fs.existsSync(synthetic), 'run scripts/make_synthetic_demo.py to enable');

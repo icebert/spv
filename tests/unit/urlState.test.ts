@@ -44,6 +44,18 @@ describe('url state', () => {
       dimOthers: true,
       playing: false,
       playFps: 2,
+      alignment: {
+        0: { dx: 12.5, dy: -3, rot: 90, fx: true, fy: false },
+        4: { dx: 0, dy: 1, rot: 0, fx: false, fy: true },
+      },
+      crossfade: false,
+    };
+    s.graph = {
+      enabled: true,
+      key: 'spatial_connectivities',
+      color: '#ff00ff',
+      opacity: 0.5,
+      maxEdges: 20000,
     };
     s.images = { enabled: false, opacity: 0.5, resolution: 'lowres', grayscale: true };
     s.color = {
@@ -93,6 +105,7 @@ describe('url state', () => {
     expect(back.color).toEqual(s.color);
     expect(back.filter).toEqual(s.filter);
     expect(back.appearance).toEqual(s.appearance);
+    expect(back.graph).toEqual(s.graph);
     expect(back.ui.camera).toEqual(s.ui.camera);
     expect(back.ui.sidebar).toBe(false);
     // serialising again is stable
