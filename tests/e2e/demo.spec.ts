@@ -173,21 +173,28 @@ test.describe('demo dataset', () => {
   });
 
   test('switching datasets three times leaves GPU memory at baseline', async ({ page }) => {
-    await page.goto('#dataset=demo');
-    await waitReady(page);
-    const baseline = await info(page);
-    for (let k = 0; k < 3; k++) {
-      await page.evaluate((u) => window.__spv.app.openUrl(u), `${BASE}fixtures/visium_align.h5ad`);
-      await page.waitForFunction(() => window.__spv.info().n === 8);
-      await page.waitForFunction(() => window.__spv.info().images.loaded === 1);
-      await page.evaluate(() => window.__spv.app.openFromManifest('demo'));
+    // Measure only after the default colouring has uploaded its textures and a frame was drawn.
+    const settle = async (n: number) => {
       await page.waitForFunction(
-        (n) => window.__spv.info().n === n && window.__spv.ready,
-        meta.n_obs,
+        (k) =>
+          window.__spv.ready && window.__spv.info().n === k && window.__spv.info().legend !== null,
+        n,
         { timeout: 120_000 },
       );
+      await page.evaluate(() => window.__spv.app.viewer.render());
+      return info(page);
+    };
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    const baseline = await settle(meta.n_obs);
+    for (let k = 0; k < 3; k++) {
+      await page.evaluate((u) => window.__spv.app.openUrl(u), `${BASE}fixtures/visium_align.h5ad`);
+      await settle(8);
+      await page.waitForFunction(() => window.__spv.info().images.loaded === 1);
+      await page.evaluate(() => window.__spv.app.openFromManifest('demo'));
+      await settle(meta.n_obs);
     }
-    const after = await info(page);
+    const after = await settle(meta.n_obs);
     expect(after.renderer.geometries).toBe(baseline.renderer.geometries);
     expect(after.renderer.textures).toBe(baseline.renderer.textures);
     expect(after.images.bytes).toBe(0);
