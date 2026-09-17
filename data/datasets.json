@@ -1,0 +1,26 @@
+{
+  "datasets": [
+    {
+      "id": "demo",
+      "name": "demo — 103,085 cells, 16 sections",
+      "description": "103,085 cells × 434 genes; 16 sections from obs/slice; 3-D coordinates in obsm/spatial; CSR X (float64); no tissue images",
+      "url": "data/demo.h5ad",
+      "size_bytes": 25193286,
+      "spatial_key": "obsm/spatial",
+      "library_key": "obs/slice",
+      "default_color_by": {
+        "type": "obs",
+        "key": "seurat_clusters"
+      },
+      "default_tooltip_fields": [
+        "slice",
+        "seurat_clusters"
+      ],
+      "example_genes": [
+        "Itpr1",
+        "Cacnb4",
+        "Gria2"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.venv/
+data/
+tests/fixtures/
+test-results/
+playwright-report/
+package-lock.json
+*.md

@@ -1,0 +1,9 @@
+# Python tooling for SPV scripts (pinned to the versions used during development).
+# Install:  uv venv .venv --python 3.12 && uv pip install --python .venv/bin/python --only-binary :all: -r scripts/requirements.txt
+numpy==2.3.5
+scipy==1.18.1
+h5py==3.16.0
+anndata==0.13.3.post0
+scanpy==1.12.4
+# squidpy is only needed by make_synthetic_demo.py; install it separately if you want that script:
+#   uv pip install --python .venv/bin/python squidpy

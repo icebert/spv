@@ -1,0 +1,128 @@
+{
+ "n_obs": 30,
+ "n_vars": 5,
+ "obs_index_head": [
+  "c0",
+  "c1",
+  "c2"
+ ],
+ "var_names": [
+  "Gene000",
+  "Gene001",
+  "Gene002",
+  "Gene003",
+  "Gene004"
+ ],
+ "obs_columns": {
+  "z": {
+   "kind": "numeric",
+   "values": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    10.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0,
+    20.0
+   ]
+  },
+  "group": {
+   "kind": "categorical",
+   "categories": [
+    "g1",
+    "g2"
+   ],
+   "codes": [
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    1,
+    1
+   ],
+   "ordered": false
+  }
+ },
+ "var_columns": {},
+ "X": null,
+ "layers": {},
+ "raw": null,
+ "obsm": {
+  "spatial": {
+   "shape": [
+    30,
+    2
+   ],
+   "col_sums": [
+    1500.8228,
+    1460.2831
+   ],
+   "head": [
+    [
+     81.952797,
+     77.441783
+    ],
+    [
+     65.390543,
+     58.998522
+    ]
+   ]
+  }
+ },
+ "obsp_edges": {},
+ "uns_colors": {},
+ "moranI": null,
+ "detection": {
+  "spatial_key": "obsm/spatial",
+  "ndim": 2,
+  "z_source": "obs/z",
+  "library_key": null
+ }
+}

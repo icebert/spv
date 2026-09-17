@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+data/synthetic/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+*.log
+.DS_Store
+.vite/
+coverage/

@@ -1,0 +1,1297 @@
+{
+  "file": "data/demo.h5ad",
+  "size_bytes": 25193286,
+  "root_attrs": {
+    "encoding-type": "anndata",
+    "encoding-version": "0.1.0"
+  },
+  "top_level_keys": [
+    "X",
+    "layers",
+    "obs",
+    "obsm",
+    "obsp",
+    "uns",
+    "var",
+    "varm",
+    "varp"
+  ],
+  "structure": [
+    {
+      "path": "X",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "csr_matrix",
+        "encoding-version": "0.1.0",
+        "shape": [
+          103085,
+          434
+        ]
+      }
+    },
+    {
+      "path": "X/data",
+      "kind": "dataset",
+      "shape": [
+        8814835
+      ],
+      "dtype": "float64",
+      "chunks": [
+        8609
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {}
+    },
+    {
+      "path": "X/indices",
+      "kind": "dataset",
+      "shape": [
+        8814835
+      ],
+      "dtype": "int32",
+      "chunks": [
+        17217
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {}
+    },
+    {
+      "path": "X/indptr",
+      "kind": "dataset",
+      "shape": [
+        103086
+      ],
+      "dtype": "int32",
+      "chunks": [
+        3222
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {}
+    },
+    {
+      "path": "layers",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0"
+      }
+    },
+    {
+      "path": "obs",
+      "kind": "group",
+      "attrs": {
+        "column-order": [
+          "seurat_clusters",
+          "subtype",
+          "slice",
+          "structure",
+          "substructure"
+        ],
+        "encoding-type": "dataframe",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/_index",
+      "kind": "dataset",
+      "shape": [
+        103085
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        1611
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/seurat_clusters",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "categorical",
+        "encoding-version": "0.2.0",
+        "ordered": false
+      }
+    },
+    {
+      "path": "obs/seurat_clusters/categories",
+      "kind": "dataset",
+      "shape": [
+        25
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        25
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/seurat_clusters/codes",
+      "kind": "dataset",
+      "shape": [
+        103085
+      ],
+      "dtype": "int8",
+      "chunks": [
+        6443
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/slice",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "categorical",
+        "encoding-version": "0.2.0",
+        "ordered": false
+      }
+    },
+    {
+      "path": "obs/slice/categories",
+      "kind": "dataset",
+      "shape": [
+        16
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        16
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/slice/codes",
+      "kind": "dataset",
+      "shape": [
+        103085
+      ],
+      "dtype": "int8",
+      "chunks": [
+        6443
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/structure",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "categorical",
+        "encoding-version": "0.2.0",
+        "ordered": false
+      }
+    },
+    {
+      "path": "obs/structure/categories",
+      "kind": "dataset",
+      "shape": [
+        28
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        28
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/structure/codes",
+      "kind": "dataset",
+      "shape": [
+        103085
+      ],
+      "dtype": "int8",
+      "chunks": [
+        6443
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/substructure",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "categorical",
+        "encoding-version": "0.2.0",
+        "ordered": false
+      }
+    },
+    {
+      "path": "obs/substructure/categories",
+      "kind": "dataset",
+      "shape": [
+        74
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        74
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/substructure/codes",
+      "kind": "dataset",
+      "shape": [
+        103085
+      ],
+      "dtype": "int8",
+      "chunks": [
+        6443
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/subtype",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "categorical",
+        "encoding-version": "0.2.0",
+        "ordered": false
+      }
+    },
+    {
+      "path": "obs/subtype/categories",
+      "kind": "dataset",
+      "shape": [
+        45
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        45
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obs/subtype/codes",
+      "kind": "dataset",
+      "shape": [
+        103085
+      ],
+      "dtype": "int8",
+      "chunks": [
+        6443
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obsm",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0"
+      }
+    },
+    {
+      "path": "obsm/spatial",
+      "kind": "dataset",
+      "shape": [
+        103085,
+        3
+      ],
+      "dtype": "float64",
+      "chunks": [
+        3222,
+        1
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "obsp",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0"
+      }
+    },
+    {
+      "path": "uns",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0"
+      }
+    },
+    {
+      "path": "var",
+      "kind": "group",
+      "attrs": {
+        "column-order": [],
+        "encoding-type": "dataframe",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "var/_index",
+      "kind": "dataset",
+      "shape": [
+        434
+      ],
+      "dtype": "string(vlen)",
+      "chunks": [
+        434
+      ],
+      "filters": [
+        "gzip(4)"
+      ],
+      "attrs": {
+        "encoding-type": "string-array",
+        "encoding-version": "0.2.0"
+      }
+    },
+    {
+      "path": "varm",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0"
+      }
+    },
+    {
+      "path": "varp",
+      "kind": "group",
+      "attrs": {
+        "encoding-type": "dict",
+        "encoding-version": "0.1.0"
+      }
+    }
+  ],
+  "structure_truncated": false,
+  "filters_used": [
+    "gzip"
+  ],
+  "n_obs": 103085,
+  "n_vars": 434,
+  "obs": {
+    "encoding": "dataframe",
+    "encoding_version": "0.2.0",
+    "index_name": "_index",
+    "index_dtype": "string(vlen)",
+    "index_head": [
+      "r1_s1_107603702067126619834540088815104818246",
+      "r1_s1_109959396799214035981119946190857977418",
+      "r1_s1_135706284758182803771561938061303950918",
+      "r1_s1_136275259212987105505842152452771043023",
+      "r1_s1_136657796041264977222253261451475588054"
+    ],
+    "n": 103085,
+    "column_order": [
+      "seurat_clusters",
+      "subtype",
+      "slice",
+      "structure",
+      "substructure"
+    ],
+    "columns": [
+      {
+        "name": "seurat_clusters",
+        "encoding": "categorical",
+        "kind": "categorical",
+        "codes_dtype": "int8",
+        "categories_dtype": "string(vlen)",
+        "n_categories": 25,
+        "categories_head": [
+          "Astro",
+          "Car3",
+          "D1 MSN",
+          "D2 MSN",
+          "Endo",
+          "L2 IT ENTl",
+          "L2/3 IT CTX",
+          "L2/3 IT ENTl"
+        ],
+        "ordered": false,
+        "n_missing": 0,
+        "n": 103085
+      },
+      {
+        "name": "subtype",
+        "encoding": "categorical",
+        "kind": "categorical",
+        "codes_dtype": "int8",
+        "categories_dtype": "string(vlen)",
+        "n_categories": 45,
+        "categories_head": [
+          "Astro",
+          "Car3 1",
+          "Car3 2",
+          "D1 MSN",
+          "D2 MSN",
+          "Endo 1",
+          "Endo 2",
+          "L2 IT ENTl 1"
+        ],
+        "ordered": false,
+        "n_missing": 0,
+        "n": 103085
+      },
+      {
+        "name": "slice",
+        "encoding": "categorical",
+        "kind": "categorical",
+        "codes_dtype": "int8",
+        "categories_dtype": "string(vlen)",
+        "n_categories": 16,
+        "categories_head": [
+          "slice1",
+          "slice2",
+          "slice3",
+          "slice4",
+          "slice5",
+          "slice6",
+          "slice7",
+          "slice8"
+        ],
+        "ordered": false,
+        "n_missing": 0,
+        "n": 103085
+      },
+      {
+        "name": "structure",
+        "encoding": "categorical",
+        "kind": "categorical",
+        "codes_dtype": "int8",
+        "categories_dtype": "string(vlen)",
+        "n_categories": 28,
+        "categories_head": [
+          "ACB",
+          "AId",
+          "AIp",
+          "AIv",
+          "BLA",
+          "CEA",
+          "CLA",
+          "CP"
+        ],
+        "ordered": false,
+        "n_missing": 0,
+        "n": 103085
+      },
+      {
+        "name": "substructure",
+        "encoding": "categorical",
+        "kind": "categorical",
+        "codes_dtype": "int8",
+        "categories_dtype": "string(vlen)",
+        "n_categories": 74,
+        "categories_head": [
+          "ACB",
+          "AId1",
+          "AId2/3",
+          "AId5",
+          "AId6a",
+          "AId6b",
+          "AIp1",
+          "AIp2/3"
+        ],
+        "ordered": false,
+        "n_missing": 0,
+        "n": 103085
+      }
+    ],
+    "extra_keys": [],
+    "has_legacy_categories_group": false
+  },
+  "var": {
+    "encoding": "dataframe",
+    "encoding_version": "0.2.0",
+    "index_name": "_index",
+    "index_dtype": "string(vlen)",
+    "index_head": [
+      "Oprk1",
+      "Npbwr1",
+      "Sulf1",
+      "Kcnb2",
+      "Col19a1"
+    ],
+    "n": 434,
+    "column_order": [],
+    "columns": [],
+    "extra_keys": [],
+    "has_legacy_categories_group": false,
+    "n_duplicate_names": 0,
+    "gene_name_columns": [],
+    "names_head": [
+      "Oprk1",
+      "Npbwr1",
+      "Sulf1",
+      "Kcnb2",
+      "Col19a1",
+      "Il1r1",
+      "Il1rl1",
+      "Spag16",
+      "Igfbp5",
+      "Asic4"
+    ]
+  },
+  "X": {
+    "format": "csr",
+    "shape": [
+      103085,
+      434
+    ],
+    "dtype": "float64",
+    "index_dtype": "int32",
+    "indptr_dtype": "int32",
+    "nnz": 8814835,
+    "chunks": {
+      "data": [
+        8609
+      ],
+      "indices": [
+        17217
+      ],
+      "indptr": [
+        3222
+      ]
+    },
+    "compression": "gzip",
+    "attrs": {
+      "encoding-type": "csr_matrix",
+      "encoding-version": "0.1.0",
+      "shape": [
+        103085,
+        434
+      ]
+    },
+    "value_sample": {
+      "min": 0.6931471805599453,
+      "max": 4.465908118654584,
+      "all_integer": false,
+      "n": 200000
+    }
+  },
+  "layers": {},
+  "raw": null,
+  "obsm": {
+    "spatial": {
+      "kind": "array",
+      "shape": [
+        103085,
+        3
+      ],
+      "dtype": "float64",
+      "chunks": [
+        3222,
+        1
+      ],
+      "compression": "gzip"
+    }
+  },
+  "obsp": {},
+  "varm": {},
+  "varp": {},
+  "uns": {
+    "present": true,
+    "keys": [],
+    "spatial": null,
+    "colors": {},
+    "moranI": null,
+    "spatial_neighbors": null,
+    "squidpy_results": []
+  },
+  "spatial": {
+    "key": "obsm/spatial",
+    "ndim": 3,
+    "method": "native3d",
+    "z_source": null,
+    "n_nonfinite_rows": 0,
+    "extent": {
+      "x": {
+        "min": 672.5057081732732,
+        "max": 1060.8407189658553,
+        "range": 388.3350107925821,
+        "mean": 877.8917464433372,
+        "n_unique": 102099
+      },
+      "y": {
+        "min": 302.0799573668504,
+        "max": 620.3684990027002,
+        "range": 318.2885416358498,
+        "mean": 456.348323159858,
+        "n_unique": 102165
+      },
+      "z": {
+        "min": 320.0,
+        "max": 618.0,
+        "range": 298.0,
+        "mean": 455.8529077945385,
+        "n_unique": 16
+      }
+    },
+    "checksum": {
+      "x": 90497470.68211141,
+      "y": 47042666.892933965,
+      "z": 46991597.0
+    },
+    "z_is_discrete": true,
+    "z_levels": [
+      320.0,
+      340.0,
+      355.0,
+      380.0,
+      398.0,
+      418.0,
+      438.0,
+      461.0,
+      478.0,
+      498.0,
+      518.0,
+      538.0,
+      558.0,
+      578.0,
+      598.0,
+      618.0
+    ],
+    "z_spacing_uniform": false
+  },
+  "library": {
+    "key": "obs/slice",
+    "method": "candidate_name",
+    "matches_uns_spatial": null,
+    "warning": null
+  },
+  "sections": {
+    "library_key": "obs/slice",
+    "order_source": "natural sort of category names",
+    "stored_order_is_natural": true,
+    "n_sections": 16,
+    "n_cells_without_section": 0,
+    "sections": [
+      {
+        "id": "slice1",
+        "name": "slice1",
+        "ordinal": 0,
+        "n_cells": 7090,
+        "bbox": {
+          "min": [
+            672.5057081732732,
+            302.0799573668504,
+            320.0
+          ],
+          "max": [
+            896.8073502773077,
+            531.1619461897384,
+            320.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 320.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice2",
+        "name": "slice2",
+        "ordinal": 1,
+        "n_cells": 7118,
+        "bbox": {
+          "min": [
+            703.7694275511516,
+            325.53975576514347,
+            340.0
+          ],
+          "max": [
+            910.0693493482704,
+            555.2108757739765,
+            340.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 340.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice3",
+        "name": "slice3",
+        "ordinal": 2,
+        "n_cells": 5656,
+        "bbox": {
+          "min": [
+            739.9259982809539,
+            335.4618136681745,
+            355.0
+          ],
+          "max": [
+            919.1591841421797,
+            562.0108711497857,
+            355.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 355.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice4",
+        "name": "slice4",
+        "ordinal": 3,
+        "n_cells": 7365,
+        "bbox": {
+          "min": [
+            736.9149200439455,
+            363.1504760742189,
+            380.0
+          ],
+          "max": [
+            943.0850799560545,
+            586.8495239257811,
+            380.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 380.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice5",
+        "name": "slice5",
+        "ordinal": 4,
+        "n_cells": 7589,
+        "bbox": {
+          "min": [
+            737.6371951010955,
+            337.6744164844647,
+            398.0
+          ],
+          "max": [
+            960.403769839469,
+            615.7153759916445,
+            398.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 398.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice6",
+        "name": "slice6",
+        "ordinal": 5,
+        "n_cells": 6056,
+        "bbox": {
+          "min": [
+            790.0042632578507,
+            365.8187404736534,
+            418.0
+          ],
+          "max": [
+            969.0590730635912,
+            592.1180846828347,
+            418.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 418.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice7",
+        "name": "slice7",
+        "ordinal": 6,
+        "n_cells": 8630,
+        "bbox": {
+          "min": [
+            776.4879816990652,
+            340.29527424863113,
+            438.0
+          ],
+          "max": [
+            983.6095006264751,
+            616.7539722759758,
+            438.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 438.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice8",
+        "name": "slice8",
+        "ordinal": 7,
+        "n_cells": 8143,
+        "bbox": {
+          "min": [
+            817.3353720749307,
+            319.3861617878618,
+            461.0
+          ],
+          "max": [
+            993.7982760682099,
+            597.042867819194,
+            461.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 461.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice9",
+        "name": "slice9",
+        "ordinal": 8,
+        "n_cells": 8546,
+        "bbox": {
+          "min": [
+            775.3147267252602,
+            320.61972813844204,
+            478.0
+          ],
+          "max": [
+            1008.9798318953217,
+            573.0290767475545,
+            478.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 478.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice10",
+        "name": "slice10",
+        "ordinal": 9,
+        "n_cells": 6999,
+        "bbox": {
+          "min": [
+            823.4366029011392,
+            322.82859271038666,
+            498.0
+          ],
+          "max": [
+            1021.106528339609,
+            569.7834061890954,
+            498.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 498.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice11",
+        "name": "slice11",
+        "ordinal": 10,
+        "n_cells": 5444,
+        "bbox": {
+          "min": [
+            820.4903269231969,
+            375.6140831870797,
+            518.0
+          ],
+          "max": [
+            1031.6969692761209,
+            586.8655129383775,
+            518.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 518.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice12",
+        "name": "slice12",
+        "ordinal": 11,
+        "n_cells": 5963,
+        "bbox": {
+          "min": [
+            825.1072839326685,
+            367.95085628716487,
+            538.0
+          ],
+          "max": [
+            1042.3277730674488,
+            620.3684990027002,
+            538.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 538.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice13",
+        "name": "slice13",
+        "ordinal": 12,
+        "n_cells": 5412,
+        "bbox": {
+          "min": [
+            846.9427689821268,
+            364.5394189928704,
+            558.0
+          ],
+          "max": [
+            1046.8633537556775,
+            608.3331149784565,
+            558.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 558.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice14",
+        "name": "slice14",
+        "ordinal": 13,
+        "n_cells": 5094,
+        "bbox": {
+          "min": [
+            857.4527682555845,
+            359.1711076271573,
+            578.0
+          ],
+          "max": [
+            1050.750361325813,
+            595.8478233711409,
+            578.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 578.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice15",
+        "name": "slice15",
+        "ordinal": 14,
+        "n_cells": 4202,
+        "bbox": {
+          "min": [
+            854.7961966279672,
+            375.4154315554871,
+            598.0
+          ],
+          "max": [
+            1057.1921378126194,
+            602.0014344743333,
+            598.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 598.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      },
+      {
+        "id": "slice16",
+        "name": "slice16",
+        "ordinal": 15,
+        "n_cells": 3778,
+        "bbox": {
+          "min": [
+            859.4921657851725,
+            354.62010940304964,
+            618.0
+          ],
+          "max": [
+            1060.8407189658553,
+            597.0998545151488,
+            618.0
+          ]
+        },
+        "z_unique_count": 1,
+        "z": 618.0,
+        "has_image": false,
+        "image_keys": [],
+        "spot_diameter_fullres": null,
+        "tissue_hires_scalef": null
+      }
+    ],
+    "xy_center_drift": 175.5099131502235,
+    "xy_center_drift_fraction": 0.4519549056161898
+  },
+  "suggested": {
+    "name": "demo",
+    "spatial_key": "obsm/spatial",
+    "library_key": "obs/slice",
+    "default_color_by": {
+      "type": "obs",
+      "key": "seurat_clusters"
+    },
+    "default_tooltip_fields": [
+      "slice",
+      "seurat_clusters"
+    ],
+    "gene_examples": [
+      {
+        "name": "Itpr1",
+        "index": 170,
+        "nnz": 98508,
+        "sum": 180364.45022923363,
+        "max": 3.912023005428146,
+        "mean_over_all_cells": 1.7496672671022324,
+        "first_nonzero": [
+          [
+            0,
+            2.70805020110221
+          ],
+          [
+            1,
+            2.4849066497880004
+          ],
+          [
+            2,
+            1.6094379124341003
+          ],
+          [
+            3,
+            1.6094379124341003
+          ],
+          [
+            4,
+            1.791759469228055
+          ]
+        ]
+      },
+      {
+        "name": "Cacnb4",
+        "index": 38,
+        "nnz": 97614,
+        "sum": 165948.79634399217,
+        "max": 4.189654742026425,
+        "mean_over_all_cells": 1.6098248663141308,
+        "first_nonzero": [
+          [
+            0,
+            0.6931471805599453
+          ],
+          [
+            2,
+            0.6931471805599453
+          ],
+          [
+            3,
+            1.6094379124341003
+          ],
+          [
+            4,
+            0.6931471805599453
+          ],
+          [
+            6,
+            0.6931471805599453
+          ]
+        ]
+      },
+      {
+        "name": "Gria2",
+        "index": 85,
+        "nnz": 97515,
+        "sum": 175759.36263525713,
+        "max": 3.8501476017100584,
+        "mean_over_all_cells": 1.7049945446501154,
+        "first_nonzero": [
+          [
+            0,
+            0.6931471805599453
+          ],
+          [
+            2,
+            1.6094379124341003
+          ],
+          [
+            3,
+            0.6931471805599453
+          ],
+          [
+            4,
+            0.6931471805599453
+          ],
+          [
+            5,
+            3.044522437723423
+          ]
+        ]
+      },
+      {
+        "name": "Pbx3",
+        "index": 36,
+        "nnz": 12870,
+        "sum": 10396.53143557195,
+        "max": 2.0794415416798357,
+        "mean_over_all_cells": 0.10085396939973759,
+        "first_nonzero": [
+          [
+            12,
+            0.6931471805599453
+          ],
+          [
+            22,
+            0.6931471805599453
+          ],
+          [
+            25,
+            0.6931471805599453
+          ],
+          [
+            30,
+            0.6931471805599453
+          ],
+          [
+            33,
+            0.6931471805599453
+          ]
+        ]
+      },
+      {
+        "name": "Kcnj11",
+        "index": 197,
+        "nnz": 12665,
+        "sum": 9568.034472805493,
+        "max": 1.791759469228055,
+        "mean_over_all_cells": 0.09281694206533922,
+        "first_nonzero": [
+          [
+            41,
+            0.6931471805599453
+          ],
+          [
+            47,
+            0.6931471805599453
+          ],
+          [
+            48,
+            0.6931471805599453
+          ],
+          [
+            56,
+            0.6931471805599453
+          ],
+          [
+            57,
+            0.6931471805599453
+          ]
+        ]
+      }
+    ]
+  },
+  "flags": [
+    "var has no columns besides the index (no alternative gene-symbol column)",
+    "X is CSR: gene-column extraction must scan all of indices (viewer reads it in chunks); prepare_h5ad.py --csc makes gene switching O(nnz_column); nnz=8,814,835 is below the 50,000,000 warning threshold",
+    "X data is float64 \u2192 viewer downcasts to float32 for the GPU",
+    "X values look log-normalised (non-integer, max < 30) \u2192 log1p toggle should default off",
+    "uns is empty: no uns/spatial (no tissue images, no scale factors), no *_colors, no Squidpy results",
+    "obsm/spatial is 3-D with a discrete z (16 levels, NON-uniform spacing) \u2192 native-3D path with section stacking from data z",
+    "section XY bounding-box centres drift by 175.5 (45% of XY extent) \u2192 sections are not registered; 'Stack normalized' recentres them",
+    "no obs/in_tissue column (Visium filter not applicable)",
+    "no numeric obs columns (continuous obs coloring has nothing to offer)"
+  ]
+}
