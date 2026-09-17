@@ -439,6 +439,7 @@
     "encoding_version": "0.2.0",
     "index_name": "_index",
     "index_dtype": "string(vlen)",
+    "index_encoding": "string-array",
     "index_head": [
       "r1_s1_107603702067126619834540088815104818246",
       "r1_s1_109959396799214035981119946190857977418",
@@ -569,6 +570,7 @@
     "encoding_version": "0.2.0",
     "index_name": "_index",
     "index_dtype": "string(vlen)",
+    "index_encoding": "string-array",
     "index_head": [
       "Oprk1",
       "Npbwr1",

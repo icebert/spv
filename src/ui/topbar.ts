@@ -10,7 +10,7 @@ export function createTopbar(app: App): HTMLElement {
     className: 'spv-autocomplete-list',
     style: 'display:none;right:0;left:auto;top:110%;min-width:200px',
   });
-  const shotWrap = el('div', { className: 'spv-autocomplete', style: 'position:relative' });
+  const shotWrap = el('div', { className: 'spv-menu-wrap' });
   const shotBtn = button(
     'Screenshot',
     () => (shotMenu.style.display = shotMenu.style.display === 'none' ? 'block' : 'none'),
@@ -26,7 +26,7 @@ export function createTopbar(app: App): HTMLElement {
       el(
         'div',
         {
-          className: 'spv-autocomplete-item',
+          className: 'spv-menu-item',
           onClick: () => {
             shotMenu.style.display = 'none';
             void app

@@ -108,3 +108,38 @@ Would make gene switching an `indptr` slice instead of a full `indices` scan and
   0.9 s; next gene 20 ms. Local file via WORKERFS: identical numbers, no copy into WASM memory.
 - Fixture `lzf.h5` (h5py's built-in LZF filter) covers the plugin path in Node via
   `install_local_plugins`; the browser path uses `?url` asset imports (`src/h5ad/plugins.ts`).
+
+## 8. Phase 5 notes (performance, E2E, README)
+
+- **Benchmark method**: `.scratch`-style Playwright scripts against the production build served at
+  `/spv/`, Chromium launched with `--use-angle=metal --ignore-gpu-blocklist` so headless Chromium
+  uses the real GPU (AMD Radeon Pro 5500 XT here). Headless has no vsync, so frame rate was
+  measured as render + synchronous 1-pixel `readPixels` (a true GPU fence; `gl.finish()` returned
+  early on this driver and gave meaningless sub-millisecond numbers for 2 M points). Interaction
+  stalls are the synchronous main-thread time of the store update plus the next two frames.
+- **Bug found by the benchmark**: the render loop re-armed itself twice per frame while OrbitControls
+  damping settled (once from the controls' `change` event via `requestRender()`, once from the loop),
+  so pending `requestAnimationFrame` callbacks doubled every frame. Fixed in `Viewer.frame` (only one
+  pending frame). The earlier headless "30 fps orbit" number was this bug, not rendering cost.
+- **Numbers** are in README "Measured performance". Highlights: demo points visible 0.58 s after
+  navigation with 7.3 MB of 25 MB fetched; 103k/500k/2M points at 2.9/5.2/11 ms per frame; layout
+  switches 2–9 ms of main-thread work; first CSR gene 0.95 s (index build), later genes ≤ 22 ms;
+  4 × 2048² images decoded and uploaded 1.3 s after the first frame; dataset switching ×3 leaves GPU
+  geometry/texture counts at baseline.
+- **Not measurable here**: the spec's "2022-class laptop with integrated graphics" target. Frame
+  times above are from a desktop discrete GPU; at 2 M points (11–19 ms per frame) an integrated GPU
+  will be several times slower — the subsample filter exists for that case.
+- **E2E**: 9 Playwright tests (`tests/e2e/demo.spec.ts`) run against the production build at a
+  non-root base: manifest load and meta.json match, gene/category colouring and legend toggles,
+  section stepping and all layouts, share-link round trip, dataset switching memory baseline,
+  image alignment on the checkerboard fixture (red marker in the upper half), in_tissue filter,
+  error paths, and a skippable native-3D synthetic test. They also run in the deploy workflow.
+- **External hosting** verified with `curl`: GitHub Pages sends `Accept-Ranges: bytes`; a public GCS
+  object serves ranges (CORS is per-bucket config); Zenodo sends `Access-Control-Allow-Origin: *` but
+  ignored a Range request (full-download fallback). GitHub Release assets were not verified.
+- **Scripts**: `prepare_h5ad.py` verified on the demo (CSR → CSC float32, 25.2 → 25.8 MB) and on a
+  synthetic Visium-like file (stratified subsample, top genes, image downscale with consistent
+  `tissue_hires_scalef`, `spatial3d` materialisation); `inspect_h5ad.py` re-read both. The inspector
+  gained support for anndata ≥ 0.11 `nullable-string-array` indexes/columns (current anndata writes
+  them; the demo does not use them).
+- **Nice-to-haves (§7.3)** are the remaining work, in the spec's order.

@@ -211,7 +211,10 @@ export class Viewer {
       this.needsRender = false;
       this.render();
     }
-    if (moved || this.rig.autoRotate) this.raf = requestAnimationFrame(this.frame);
+    // Exactly one pending frame: the controls' `change` event may already have re-armed the loop
+    // via requestRender() during rig.update(); scheduling again here would double the callbacks
+    // every frame while damping settles.
+    if ((moved || this.rig.autoRotate) && !this.raf) this.raf = requestAnimationFrame(this.frame);
   };
 
   render(): void {

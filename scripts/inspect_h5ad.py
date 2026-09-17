@@ -83,6 +83,25 @@ def decode_strings(arr: np.ndarray) -> list[str]:
     return [x.decode("utf-8", "replace") if isinstance(x, bytes) else str(x) for x in arr.tolist()]
 
 
+def read_string_array(obj: h5py.HLObject, na_value: str = "NA") -> list[str]:
+    """Read a string-like dataset or a ``nullable-string-array`` group (anndata >= 0.11)."""
+    if isinstance(obj, h5py.Group):
+        values = read_string_array(obj["values"], na_value)
+        if "mask" in obj:
+            mask = obj["mask"][...]
+            na = to_py(obj.attrs.get("na-value", na_value))
+            values = [na if m else v for v, m in zip(values, mask)]
+        return values
+    arr = obj[...]
+    return decode_strings(arr) if arr.dtype.kind in ("O", "S", "U") else [str(v) for v in arr.tolist()]
+
+
+def string_length(obj: h5py.HLObject) -> int | None:
+    if isinstance(obj, h5py.Group):
+        return int(obj["values"].shape[0]) if "values" in obj else None
+    return int(obj.shape[0]) if obj.ndim >= 1 else None
+
+
 def dtype_str(ds: h5py.Dataset) -> str:
     dt = ds.dtype
     if h5py.check_string_dtype(dt) is not None:
@@ -168,6 +187,10 @@ def column_info(f: h5py.File, df: h5py.Group, name: str, sample: int = 8) -> dic
                 })
                 info["_categories"] = cat_list  # used internally, stripped before writing
                 info["_codes"] = codes_arr
+            elif enc == "nullable-string-array" or ("values" in obj and "mask" in obj and h5py.check_string_dtype(obj["values"].dtype) is not None):
+                vals, mask = obj["values"], obj["mask"]
+                info.update({"kind": "string", "dtype": dtype_str(vals), "n": int(vals.shape[0]), "nullable": True,
+                             "n_missing": int(mask[...].sum()), "head": read_string_array(obj)[:sample]})
             elif enc in ("nullable-integer", "nullable-boolean") or ("values" in obj and "mask" in obj):
                 vals, mask = obj["values"], obj["mask"]
                 info.update({"kind": enc or "nullable", "dtype": dtype_str(vals),
@@ -226,13 +249,15 @@ def dataframe_info(f: h5py.File, df: h5py.Group) -> dict[str, Any]:
     if order is None:
         order = [k for k in df.keys() if k not in (index_name, "__categories")]
     index_ds = df.get(index_name)
+    index_values_ds = index_ds["values"] if isinstance(index_ds, h5py.Group) and "values" in index_ds else index_ds
     out: dict[str, Any] = {
         "encoding": to_py(df.attrs.get("encoding-type")),
         "encoding_version": to_py(df.attrs.get("encoding-version")),
         "index_name": index_name,
-        "index_dtype": dtype_str(index_ds) if isinstance(index_ds, h5py.Dataset) else None,
-        "index_head": decode_strings(index_ds[:5]) if isinstance(index_ds, h5py.Dataset) and index_ds.ndim == 1 else [],
-        "n": int(index_ds.shape[0]) if isinstance(index_ds, h5py.Dataset) else None,
+        "index_dtype": dtype_str(index_values_ds) if isinstance(index_values_ds, h5py.Dataset) else None,
+        "index_encoding": to_py(index_ds.attrs.get("encoding-type")) if index_ds is not None else None,
+        "index_head": read_string_array(index_ds)[:5] if index_ds is not None else [],
+        "n": string_length(index_ds) if index_ds is not None else None,
         "column_order": order,
         "columns": [column_info(f, df, c) for c in order if c in df],
         "extra_keys": [k for k in df.keys() if k not in order and k not in (index_name, "__categories")],
@@ -611,8 +636,7 @@ def inspect(path: str, wanted_genes: list[str], n_gene_examples: int, max_items:
             flags.append(f"obs index dtype is {obs['index_dtype']} (bytes / non-string index)")
         var_names: list[str] = []
         if var:
-            idx = f["var"][var["index_name"]]
-            var_names = decode_strings(idx[...])
+            var_names = read_string_array(f["var"][var["index_name"]])
             dup = len(var_names) - len(set(var_names))
             var["n_duplicate_names"] = dup
             var["gene_name_columns"] = [c["name"] for c in var["columns"] if c["name"] in GENE_NAME_COLUMNS]
