@@ -2,7 +2,7 @@
   "datasets": [
     {
       "id": "demo",
-      "name": "demo — 103,085 cells, 16 sections",
+      "name": "demo",
       "description": "103,085 cells × 434 genes; 16 sections from obs/slice; 3-D coordinates in obsm/spatial; CSR X (float64); no tissue images",
       "url": "data/demo.h5ad",
       "size_bytes": 25193286,

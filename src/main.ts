@@ -1,226 +1,257 @@
-// Phase 3 bootstrap: loads a dataset through the worker and renders it with the point-cloud core.
-// Keyboard: L cycle layout, ←/→ step sections, R reset view, 1/2/3 top/front/side, 4 iso,
-// O orthographic, G colour by a gene, C colour by cluster, A auto-rotate.
-// Exposes `window.__spv` for the E2E tests. The full UI arrives in Phase 4.
-import { colormapLUT } from './color/colormaps';
-import { paletteFor } from './color/palettes';
-import { H5adClient } from './h5ad/client';
-import { defaultColorColumn } from './h5ad/reader';
-import type { OpenSource } from './h5ad/rpc';
-import type { ProgressEvent, SpatialData, Summary } from './h5ad/types';
-import { PointCloud } from './render/points';
-import { Viewer } from './render/scene';
-import {
-  DEFAULT_LAYOUT,
-  LAYOUT_MODES,
-  SectionTable,
-  defaultSpacing,
-  sectionGeoms,
-  type LayoutMode,
-  type LayoutParams,
-} from './render/sections';
-
-void colormapLUT;
-
-const app = document.getElementById('app')!;
-app.style.cssText =
-  'position:fixed;inset:0;overflow:hidden;background:#0f1115;color:#e5e7eb;font:13px system-ui,sans-serif';
-const canvasHost = document.createElement('div');
-canvasHost.style.cssText = 'position:absolute;inset:0';
-app.appendChild(canvasHost);
-const status = document.createElement('div');
-status.style.cssText =
-  'position:absolute;left:12px;top:12px;padding:8px 12px;background:rgba(15,17,21,.8);border-radius:8px;max-width:60ch;white-space:pre-wrap;pointer-events:none';
-app.appendChild(status);
-const say = (s: string) => (status.textContent = s);
+import './style.css';
+import { App } from './app';
+import { LAYOUT_MODES } from './render/sections';
+import { createColorbar } from './ui/colorbar';
+import { el, throttle } from './ui/dom';
+import { openHelp } from './ui/help';
+import { appearancePanel } from './ui/panels/appearance';
+import { colorPanel } from './ui/panels/color';
+import { coordinatesPanel } from './ui/panels/coordinates';
+import { datasetPanel } from './ui/panels/dataset';
+import { filterPanel } from './ui/panels/filter';
+import { infoPanel } from './ui/panels/info';
+import { sectionsPanel } from './ui/panels/sections';
+import { createSidebar } from './ui/sidebar';
+import { toast } from './ui/toast';
+import { createTooltip } from './ui/tooltip';
+import { createTopbar } from './ui/topbar';
 
 interface Debug {
+  app: App | null;
   ready: boolean;
   error: string | null;
-  summary: Summary | null;
-  spatial: Omit<SpatialData, 'xyz' | 'valid' | 'sectionOf'> | null;
-  layout: LayoutParams | null;
-  setLayout: (mode: LayoutMode) => void;
-  step: (delta: number) => void;
-  colorByGene: (name: string) => Promise<void>;
-  colorByColumn: (name: string) => Promise<void>;
-  info: () => unknown;
-  viewer: Viewer | null;
-  timings: Record<string, number>;
+  info(): unknown;
 }
-const dbg: Debug = {
-  ready: false,
-  error: null,
-  summary: null,
-  spatial: null,
-  layout: null,
-  setLayout: () => {},
-  step: () => {},
-  colorByGene: async () => {},
-  colorByColumn: async () => {},
-  info: () => null,
-  viewer: null,
-  timings: {},
-};
-(window as unknown as { __spv: Debug }).__spv = dbg;
 
-async function main(): Promise<void> {
-  const viewer = new Viewer(canvasHost);
-  dbg.viewer = viewer;
-  const client = new H5adClient();
-  const hash = new URLSearchParams(location.hash.slice(1));
-  const base = import.meta.env.BASE_URL;
-  let source: OpenSource;
-  if (hash.get('url')) source = { kind: 'url', url: hash.get('url')! };
-  else {
-    const manifest = (await (await fetch(`${base}data/datasets.json`)).json()) as {
-      datasets: { id: string; url: string }[];
-    };
-    const id = hash.get('dataset') ?? manifest.datasets[0]?.id;
-    const entry = manifest.datasets.find((d) => d.id === id);
-    if (!entry) throw new Error(`Unknown dataset ${id}`);
-    source = { kind: 'url', url: /^https?:/.test(entry.url) ? entry.url : `${base}${entry.url}` };
+const root = document.getElementById('app')!;
+
+function webglAvailable(): boolean {
+  try {
+    const c = document.createElement('canvas');
+    return Boolean(c.getContext('webgl2'));
+  } catch {
+    return false;
   }
-  const onProgress = (p: ProgressEvent) =>
-    say(`${p.stage} ${p.total ? Math.round((100 * p.done) / p.total) : ''}% ${p.message ?? ''}`);
-  const t0 = performance.now();
-  const opened = await client.call('open', source, { onProgress });
-  dbg.summary = opened.summary;
-  dbg.timings.open = performance.now() - t0;
-  const spatial = await client.call('getSpatial', null, { onProgress });
-  dbg.timings.spatial = performance.now() - t0;
-  const { xyz, valid, sectionOf, ...rest } = spatial;
-  dbg.spatial = rest;
+}
 
-  const geoms = sectionGeoms(spatial.sections, spatial.center, spatial.scale);
-  const table = new SectionTable(geoms);
-  const layout: LayoutParams = {
-    ...DEFAULT_LAYOUT,
-    spacing: defaultSpacing(geoms),
-    hidden: new Set(),
-    alignment: new Map(),
-  };
-  dbg.layout = layout;
-  const pc = new PointCloud({ n: spatial.n, xyz, valid, sectionOf }, table);
-  viewer.setPointCloud(pc);
-  const applyLayout = (fit: boolean) => {
-    const res = table.apply(layout);
-    pc.setNativeZ(res.nativeZ);
-    pc.setExplode(layout.explode, (res.bounds.min[2] + res.bounds.max[2]) / 2);
-    if (res.planar) viewer.rig.setOrthographic(true);
-    viewer.setBounds(res.bounds, fit, res.planar ? 'top' : 'iso', res.planar);
-  };
-  applyLayout(true);
-  dbg.timings.firstRender = performance.now() - t0;
+function fatal(title: string, message: string): void {
+  root.replaceChildren(
+    el(
+      'div',
+      'spv-fatal',
+      el('h1', null, 'SPV — Spatial Viewer'),
+      el('h2', null, title),
+      el('p', null, message),
+    ),
+  );
+}
 
-  const names = await client.call('getVarNames', null);
-  dbg.colorByColumn = async (name: string) => {
-    const col = await client.call('getObsColumn', name);
-    if (col.kind === 'categorical') {
-      const fileColors = await client.call('getCategoryColors', {
-        column: name,
-        n: col.categories.length,
-      });
-      pc.setCodes(col.codes);
-      pc.setPalette(paletteFor(col.categories.length, fileColors));
-      pc.setColorMode('category');
-      say(
-        `${opened.summary.nObs.toLocaleString()} cells · ${spatial.sections.length} sections · colour: ${name} (${col.categories.length} categories)`,
-      );
-    } else {
-      pc.setScalar(col.values);
-      pc.setColormap('viridis');
-      pc.setRange(col.quantiles[0], col.quantiles[995]);
-      pc.setColorMode('scalar');
-      say(`colour: ${name} (numeric)`);
-    }
-    viewer.requestRender();
-  };
-  dbg.colorByGene = async (gene: string) => {
-    const j = names.indexOf(gene);
-    if (j < 0) {
-      say(`gene ${gene} not found`);
-      return;
-    }
-    const t = performance.now();
-    const gv = await client.call('getGeneVector', { matrix: 'X', index: j }, { onProgress });
-    pc.setScalar(gv.values);
-    pc.setColormap('viridis');
-    pc.setRange(gv.quantiles[0], gv.quantiles[995]);
-    pc.setColorMode('scalar');
-    viewer.requestRender();
-    say(
-      `colour: gene ${gene} (nnz ${gv.nnz.toLocaleString()}, ${(performance.now() - t).toFixed(0)} ms)`,
+function main(): void {
+  const dbg: Debug = { app: null, ready: false, error: null, info: () => null };
+  (window as unknown as { __spv: Debug }).__spv = dbg;
+  if (!webglAvailable()) {
+    fatal(
+      'WebGL 2 is not available',
+      'SPV renders with WebGL 2. Enable hardware acceleration or try a current version of Chrome, Firefox, Edge or Safari.',
     );
-  };
-  const defaultCol = defaultColorColumn(opened.summary.obs, opened.summary.library.column);
-  if (defaultCol) await dbg.colorByColumn(defaultCol);
-  pc.setPointSize(2.5);
-
-  dbg.setLayout = (mode) => {
-    layout.mode = mode;
-    layout.dimOthers = false;
-    if (!(mode === 'tile' || mode === 'single')) viewer.rig.setOrthographic(false);
-    applyLayout(true);
-  };
-  dbg.step = (delta) => {
-    const n = spatial.sections.length;
-    if (!n) return;
-    layout.current = (layout.current + delta + n) % n;
-    if (layout.mode !== 'single') layout.dimOthers = true;
-    applyLayout(false);
-    say(`section ${spatial.sections[layout.current].name} (${layout.current + 1}/${n})`);
-  };
+    return;
+  }
+  const base = import.meta.env.BASE_URL;
+  const viewport = el('div', 'spv-viewport');
+  const app = new App(viewport, base);
+  dbg.app = app;
   dbg.info = () => ({
-    ...viewer.info(),
-    visible: pc.visibleCount,
-    layout: layout.mode,
-    current: layout.current,
+    status: app.status,
+    n: app.spatial?.n ?? 0,
+    visible: app.visibleCount(),
+    sections: app.sections.map((s) => s.name),
+    layout: app.store.slice('layout').mode,
+    current: app.store.slice('layout').current,
+    hiddenSections: app.store.slice('layout').hidden,
+    color: app.store.slice('color'),
+    legend: app.legend
+      ? { key: app.legend.key, n: app.legend.categories.length, hidden: [...app.legend.hidden] }
+      : null,
+    colorbar: app.colorbar
+      ? { label: app.colorbar.label, vmin: app.colorbar.vmin, vmax: app.colorbar.vmax }
+      : null,
+    images: {
+      enabled: app.store.slice('images').enabled,
+      loaded: [...app.imageStatus.values()].filter((s) => s.state === 'loaded').length,
+      total: app.sections.filter((s) => s.hasImage).length,
+      bytes: app.planes?.totalBytes() ?? 0,
+    },
+    renderer: app.viewer.info(),
+    loadInfo: app.loadInfo,
+    summary: app.summary
+      ? {
+          nObs: app.summary.nObs,
+          nVars: app.summary.nVars,
+          library: app.summary.library.key,
+          spatial: app.summary.spatial.key,
+          flags: app.summary.flags,
+        }
+      : null,
   });
+
+  const panels = [
+    datasetPanel(app),
+    sectionsPanel(app),
+    colorPanel(app),
+    filterPanel(app),
+    coordinatesPanel(app),
+    appearancePanel(app),
+    infoPanel(app),
+  ];
+  root.append(createTopbar(app), createSidebar(app, panels), viewport);
+  createTooltip(app);
+  createColorbar(app, viewport);
+  const notice = el('div', { className: 'spv-overlay-notice', style: 'display:none' });
+  viewport.appendChild(notice);
+  const drop = el('div', 'spv-drop', 'Drop a .h5ad file to open it');
+  document.body.appendChild(drop);
+
+  app.on((e) => {
+    if (e.type === 'notice') toast(e.message, e.kind);
+    if (e.type === 'status') {
+      dbg.ready = app.status === 'ready';
+      dbg.error = app.status === 'error' ? app.errorMessage : null;
+      const show = app.status === 'loading' || (app.status === 'ready' && !app.spatial);
+      notice.style.display = show ? 'block' : 'none';
+      notice.textContent =
+        app.status === 'loading'
+          ? `${app.statusMessage || 'Loading…'}`
+          : !app.spatial && app.status === 'ready'
+            ? '2-D/unknown coordinates — pick X, Y (and z) sources in the Coordinates panel.'
+            : '';
+    }
+    if (e.type === 'progress' && e.progress && app.status === 'loading') {
+      const p = e.progress;
+      notice.textContent = `${p.stage} ${p.total ? `${Math.round((100 * p.done) / p.total)}%` : ''} ${p.message ?? ''}`;
+    }
+  });
+  app.store.on('ui', (v) => root.classList.toggle('spv-sidebar-hidden', !v.sidebar));
+
+  // mouse → picking
+  const canvas = app.viewer.renderer.domElement;
+  const hover = throttle(
+    (x: number, y: number, cx: number, cy: number) => void app.hover(x, y, cx, cy),
+    33,
+  );
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.buttons) return;
+    const r = canvas.getBoundingClientRect();
+    hover(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY);
+  });
+  canvas.addEventListener('pointerleave', () => app.clearHover());
+  let downAt: [number, number] | null = null;
+  canvas.addEventListener('pointerdown', (e) => (downAt = [e.clientX, e.clientY]));
+  canvas.addEventListener('pointerup', (e) => {
+    if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || e.button !== 0)
+      return;
+    const r = canvas.getBoundingClientRect();
+    void app.pin(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY);
+  });
+
+  // drag & drop
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('spv-active');
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget) drop.classList.remove('spv-active');
+  });
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('spv-active');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) void app.openFile(f);
+  });
+
+  // keyboard shortcuts
   window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement) return;
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+    const st = app.store;
     switch (e.key) {
-      case 'l':
-        dbg.setLayout(LAYOUT_MODES[(LAYOUT_MODES.indexOf(layout.mode) + 1) % LAYOUT_MODES.length]);
-        break;
-      case 'ArrowLeft':
-        dbg.step(-1);
-        break;
-      case 'ArrowRight':
-        dbg.step(1);
-        break;
       case 'r':
-        viewer.rig.reset();
-        viewer.requestRender();
+      case 'R':
+        app.viewer.rig.reset();
+        app.viewer.requestRender();
+        break;
+      case 'h':
+      case 'H':
+        st.update('ui', { sidebar: !st.slice('ui').sidebar });
+        break;
+      case 'f':
+      case 'F':
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void root.requestFullscreen?.();
+        break;
+      case 's':
+      case 'S':
+        void app.screenshot(1, false).catch((err: Error) => toast(err.message, 'error'));
         break;
       case '1':
       case '2':
       case '3':
       case '4':
-        viewer.rig.preset((['top', 'front', 'side', 'iso'] as const)[Number(e.key) - 1]);
-        viewer.requestRender();
+        app.viewer.rig.preset((['top', 'front', 'side', 'iso'] as const)[Number(e.key) - 1]);
+        app.viewer.requestRender();
+        break;
+      case 'ArrowLeft':
+        app.stepSection(-1);
+        break;
+      case 'ArrowRight':
+        app.stepSection(1);
+        break;
+      case ' ':
+        if (app.sections.length > 1) {
+          e.preventDefault();
+          st.update('layout', { playing: !st.slice('layout').playing });
+        }
+        break;
+      case 'i':
+      case 'I':
+        st.update('images', { enabled: !st.slice('images').enabled });
+        break;
+      case 'l':
+      case 'L':
+        st.update('layout', {
+          mode: LAYOUT_MODES[
+            (LAYOUT_MODES.indexOf(st.slice('layout').mode) + 1) % LAYOUT_MODES.length
+          ],
+        });
         break;
       case 'o':
-        viewer.rig.setOrthographic(!viewer.rig.isOrthographic);
-        viewer.requestRender();
+      case 'O':
+        st.update('appearance', { ortho: !st.slice('appearance').ortho });
         break;
-      case 'g':
-        void dbg.colorByGene(names[Math.floor(Math.random() * names.length)]);
+      case 'Escape':
+        app.clearPin();
         break;
-      case 'c':
-        if (defaultCol) void dbg.colorByColumn(defaultCol);
-        break;
-      case 'a':
-        viewer.rig.autoRotate = !viewer.rig.autoRotate;
-        viewer.requestRender();
+      case '?':
+        openHelp();
         break;
     }
   });
-  dbg.ready = true;
+
+  // initial dataset from the URL hash, else the first manifest entry
+  void (async () => {
+    const wanted = app.applyUrlState();
+    root.classList.toggle('spv-sidebar-hidden', !app.store.slice('ui').sidebar);
+    await app.loadManifest();
+    if (wanted.local) {
+      toast(
+        'This link was made from a local file. Open the same file (Dataset panel or drag & drop) to restore the view.',
+        'info',
+        12000,
+      );
+      app.store.update('dataset', { local: false });
+    } else if (wanted.url) await app.openUrl(wanted.url);
+    else if (wanted.id) await app.openFromManifest(wanted.id);
+    else if (app.manifest[0]) await app.openFromManifest(app.manifest[0].id);
+  })();
 }
 
-main().catch((err: Error) => {
-  dbg.error = err.message;
-  say(`Error: ${err.message}`);
-  console.error(err);
-});
+main();

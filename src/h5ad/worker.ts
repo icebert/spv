@@ -13,6 +13,7 @@ import {
   defaultCoordinateSpec,
   readCategoryColors,
   readColumn,
+  readDataFrameInfo,
   readGeneVector,
   readGraphEdges,
   readImage,
@@ -482,6 +483,10 @@ const handlers: {
   getVarNames: (_id, column) => {
     const st = requireState();
     if (!column) return readIndex(st.src, st.summary.var);
+    if (column === '__raw__') {
+      if (st.src.kind('raw/var') !== 'group') return readIndex(st.src, st.summary.var);
+      return readIndex(st.src, readDataFrameInfo(st.src, 'raw/var'));
+    }
     const desc = st.summary.var.columns.find((c) => c.name === column);
     if (!desc) throw new ReaderError(`var has no column ${column}`, 'missing');
     if (desc.kind === 'categorical') {

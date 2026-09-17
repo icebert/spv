@@ -6,6 +6,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(ROOT, 'data');
+const FIXTURES_DIR = path.join(ROOT, 'tests', 'fixtures');
 const BASE = process.env.VITE_BASE ?? '/';
 
 const MIME: Record<string, string> = {
@@ -28,12 +29,17 @@ function serveDataDir(): Plugin {
     if (BASE !== '/' && url.startsWith(BASE.replace(/\/$/, ''))) {
       url = url.slice(BASE.replace(/\/$/, '').length);
     }
-    if (!url.startsWith('/data/')) return next();
-    const rel = path.normalize(url.slice('/data/'.length));
+    // tests/fixtures/ is served at /fixtures/ in dev and preview only (never copied to dist)
+    let dir = DATA_DIR;
+    let prefix = '/data/';
+    if (url.startsWith('/fixtures/')) {
+      dir = FIXTURES_DIR;
+      prefix = '/fixtures/';
+    } else if (!url.startsWith('/data/')) return next();
+    const rel = path.normalize(url.slice(prefix.length));
     if (rel === '' || rel.startsWith('..')) return next();
-    const file = path.join(DATA_DIR, rel);
-    if (!file.startsWith(DATA_DIR) || !fs.existsSync(file) || !fs.statSync(file).isFile())
-      return next();
+    const file = path.join(dir, rel);
+    if (!file.startsWith(dir) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return next();
     const stat = fs.statSync(file);
     const ext = path.extname(file).toLowerCase();
     res.setHeader('Content-Type', MIME[ext] ?? 'application/octet-stream');

@@ -21,6 +21,8 @@ Fixtures (tests/fixtures/):
   legacy.h5ad     hand-written with h5py in the anndata < 0.8 layout: X with h5sparse_format attrs,
                   obs categorical as codes + __categories reference, fixed-length byte index,
                   obsm/X_spatial as the coordinate key.
+  visium_align.h5ad  one Visium-like section with a checkerboard image and spots on the bright
+                  squares (image/spot alignment check).
   lzf.h5          LZF-compressed dataset (plugin path test).
   notanndata.h5   a plain HDF5 file (error-path test).
 
@@ -369,6 +371,42 @@ def make_legacy(out: str) -> None:
     print(f"{'legacy':<12} {os.path.getsize(path) / 1024:7.1f} kB  (h5py hand-written)")
 
 
+def make_visium_align(out: str) -> None:
+    """One Visium-like section whose 64x64 image is a checkerboard of 16 px squares with a red
+    top-left corner marker; spots sit exactly on the centres of the bright squares in full-res
+    pixel space (scalef 0.25 → 4 full-res px per image px). Used to verify image/spot alignment."""
+    H = W = 64
+    img = np.zeros((H, W, 3), dtype=np.uint8)
+    img[:] = 40
+    for r in range(0, H, 16):
+        for c in range(0, W, 16):
+            if ((r // 16) + (c // 16)) % 2 == 0:
+                img[r:r + 16, c:c + 16] = 230
+    img[0:8, 0:8] = (220, 30, 30)  # top-left marker (image row 0 = smallest y in Visium pixel space)
+    img[H - 8:H, W - 8:W] = (30, 90, 220)  # bottom-right marker
+    scalef = 0.25
+    spots = []
+    for r in range(0, H, 16):
+        for c in range(0, W, 16):
+            if ((r // 16) + (c // 16)) % 2 == 0:
+                spots.append([(c + 8) / scalef, (r + 8) / scalef])  # (x, y) full-res, y down
+    xy = np.array(spots, dtype=np.float64)
+    n = len(xy)
+    obs = pd.DataFrame({"in_tissue": np.ones(n, dtype=np.int64), "array_row": np.arange(n), "array_col": np.arange(n)}, index=[f"spot{i}" for i in range(n)])
+    obs["library_id"] = pd.Categorical(["A"] * n)
+    obs["kind"] = pd.Categorical(["bright"] * n)
+    adata = ad.AnnData(X=np.ones((n, 3), dtype=np.float32), obs=obs, var=pd.DataFrame(index=["g0", "g1", "g2"]),
+                       obsm={"spatial": xy},
+                       uns={"spatial": {"A": {"images": {"hires": img}, "scalefactors": {"tissue_hires_scalef": scalef, "spot_diameter_fullres": 40.0}}}})
+    exp = expected_for(adata, detection={"spatial_key": "obsm/spatial", "ndim": 2, "z_source": None, "library_key": "obs/library_id",
+                                         "section_order": ["A"], "order_source": "uns/spatial"},
+                       sections={"A": {"n_cells": n, "scalefactors": {"tissue_hires_scalef": scalef, "spot_diameter_fullres": 40.0},
+                                       "image_extent_fullres": [W / scalef, H / scalef]}},
+                       alignment={"image_px": [W, H], "scalef": scalef, "bright_square_centers_fullres": spots,
+                                  "marker_topleft_fullres": [4 / scalef, 4 / scalef], "marker_bottomright_fullres": [(W - 4) / scalef, (H - 4) / scalef]})
+    write(adata, out, "visium_align", exp)
+
+
 def make_lzf(out: str) -> None:
     """Dataset compressed with LZF (h5py ships the filter) — exercises the h5wasm-plugins path."""
     path = os.path.join(out, "lzf.h5")
@@ -391,7 +429,7 @@ def main() -> None:
     ap.add_argument("--out", default=os.path.join("tests", "fixtures"))
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    for fn in (make_dense, make_csr, make_csc, make_nox, make_visium2, make_demo_like, make_legacy, make_lzf, make_notanndata):
+    for fn in (make_dense, make_csr, make_csc, make_nox, make_visium2, make_demo_like, make_legacy, make_visium_align, make_lzf, make_notanndata):
         fn(args.out)
     big = [f for f in os.listdir(args.out) if os.path.getsize(os.path.join(args.out, f)) > 100 * 1024]
     if big:

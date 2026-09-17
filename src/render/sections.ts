@@ -82,23 +82,64 @@ export const DEFAULT_LAYOUT: LayoutParams = {
   alignment: new Map(),
 };
 
-/** Convert raw-unit section bboxes to unit-cube space using the worker's centre/scale. */
+/** Per-axis flips and the Y/Z swap applied in the vertex shader (`position * uFlip`, then swap). */
+export interface DisplayFrame {
+  flipX: boolean;
+  flipY: boolean;
+  flipZ: boolean;
+  swapYZ: boolean;
+}
+
+export const IDENTITY_FRAME: DisplayFrame = {
+  flipX: false,
+  flipY: false,
+  flipZ: false,
+  swapYZ: false,
+};
+
+/** Raw coordinates → unit-cube display coordinates (centre/scale from the worker, then flips/swap). */
+export function toDisplay(
+  raw: [number, number, number],
+  center: [number, number, number],
+  scale: number,
+  frame: DisplayFrame,
+): [number, number, number] {
+  const x = (raw[0] - center[0]) * scale * (frame.flipX ? -1 : 1);
+  let y = (raw[1] - center[1]) * scale * (frame.flipY ? -1 : 1);
+  let z = (raw[2] - center[2]) * scale * (frame.flipZ ? -1 : 1);
+  if (frame.swapYZ) [y, z] = [z, y];
+  return [x, y, z];
+}
+
+/** Section bboxes in display space; `z` is set when the section is planar in the display frame. */
 export function sectionGeoms(
   sections: SectionInfo[],
   center: [number, number, number],
   scale: number,
+  frame: DisplayFrame = IDENTITY_FRAME,
 ): SectionGeom[] {
   return sections.map((s) => {
     const bb = s.bbox ?? { min: center, max: center };
-    const min = bb.min.map((v, i) => (v - center[i]) * scale) as [number, number, number];
-    const max = bb.max.map((v, i) => (v - center[i]) * scale) as [number, number, number];
+    const a = toDisplay(bb.min, center, scale, frame);
+    const b = toDisplay(bb.max, center, scale, frame);
+    const min: [number, number, number] = [
+      Math.min(a[0], b[0]),
+      Math.min(a[1], b[1]),
+      Math.min(a[2], b[2]),
+    ];
+    const max: [number, number, number] = [
+      Math.max(a[0], b[0]),
+      Math.max(a[1], b[1]),
+      Math.max(a[2], b[2]),
+    ];
+    const planar = max[2] - min[2] < 1e-9;
     return {
       ordinal: s.ordinal,
       name: s.name,
       min,
       max,
       center: [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2],
-      z: s.z === null ? null : (s.z - center[2]) * scale,
+      z: planar ? min[2] : null,
       nCells: s.nCells,
     };
   });

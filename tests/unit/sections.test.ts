@@ -59,7 +59,14 @@ describe('section layouts', () => {
   });
   it('2-D sections (no z) always stack uniformly', () => {
     const flat = sectionGeoms(
-      sections.map((s) => ({ ...s, z: null })),
+      sections.map((s) => ({
+        ...s,
+        z: null,
+        bbox: {
+          min: [s.bbox!.min[0], s.bbox!.min[1], 20] as [number, number, number],
+          max: [s.bbox!.max[0], s.bbox!.max[1], 20] as [number, number, number],
+        },
+      })),
       center,
       scale,
     );

@@ -33,7 +33,7 @@ def entry_from_meta(meta_path: str) -> dict:
     parts.append("tissue images" if has_images else "no tissue images")
     entry = {
         "id": stem,
-        "name": f"{stem} — {meta['n_obs']:,} cells, {n_sections} sections" if n_sections > 1 else stem,
+        "name": stem,
         "description": "; ".join(parts),
         "url": f"data/{os.path.basename(meta['file'])}",
         "size_bytes": meta["size_bytes"],
