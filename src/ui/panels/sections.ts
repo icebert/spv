@@ -381,24 +381,35 @@ export function sectionsPanel(app: App): Panel {
       num('Y offset', a.dy, 'dy', step),
       num('Rotation', a.rot, 'rot', 1),
       cur.z !== null
-        ? el(
-            'div',
-            null,
-            num('Z offset', a.dz, 'dz', step),
-            el(
+        ? (() => {
+            const shown = Number((cur.z + a.dz).toPrecision(8));
+            const zInput = el('input', {
+              type: 'number',
+              className: 'spv-input',
+              step: 'any',
+              value: String(shown),
+            });
+            zInput.addEventListener('change', () => {
+              const v = Number(zInput.value);
+              if (Number.isFinite(v))
+                app.setAlignment(cur.ordinal, { dz: Number((v - cur.z!).toPrecision(8)) });
+            });
+            return el(
               'div',
-              'spv-row',
+              null,
               el(
-                'span',
-                { style: 'font-size:12px;color:var(--spv-muted)' },
-                `z in file ${cur.z} → shown at ${Number((cur.z + a.dz).toPrecision(8))}`,
+                'div',
+                'spv-row',
+                el('span', 'spv-slider-label', 'Shown at z'),
+                zInput,
+                el(
+                  'span',
+                  { style: 'font-size:12px;color:var(--spv-muted)' },
+                  `file: ${cur.z}${a.dz ? ` (offset ${a.dz > 0 ? '+' : ''}${Number(a.dz.toPrecision(6))})` : ''}`,
+                ),
               ),
-              button('Snap z to neighbours', () => app.snapSectionZ(cur.ordinal), {
-                className: 'spv-small',
-                title: 'Previous section z + the median section spacing',
-              }),
-            ),
-          )
+            );
+          })()
         : null,
       el(
         'div',

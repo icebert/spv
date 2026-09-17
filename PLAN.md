@@ -167,15 +167,17 @@ Would make gene switching an `indptr` slice instead of a full `indices` scan and
 Bug found while wiring these: the Color panel did not re-render its gene controls when the blend gene
 changed (caught by the E2E test). Total E2E: 15 tests (one skipped without the synthetic file).
 
-## 10. Demo z correction (requested after delivery)
+## 10. Per-section z correction (requested after delivery)
 
 Three slices of `data/demo.h5ad` are stored at a z that breaks the otherwise regular 20-unit spacing
 (spacings 20, 15, 25, 18, 20, 20, 23, 17, 20 …): slice3 = 355, slice5 = 398, slice8 = 461. The viewer
-renders the file faithfully (verified: rendered z == file z for all 16 sections), so the correction is
-viewer-side: `AlignmentState` gained `dz` (file units), carried through the section transform table,
-the share link (`al=ord:dx,dy,rot,flags,dz`), image planes and selection projection. The manifest
-entry may carry `section_alignment` keyed by section name; it is applied by default unless the URL
-brings its own `al=`, and `make_manifest.py` preserves it on regeneration. `Sections › Align current
-section` shows "z in file → shown at" plus "Snap z to neighbours" (previous section z + median step).
-The demo manifest ships dz = +5 / +2 / −3 → 360 / 400 / 458; these values follow the neighbours'
-spacing and are the proposed correction pending the data owner's confirmation. The file is unchanged.
+renders the file faithfully (verified: rendered z == file z for all 16 sections). A first fix snapped
+those three onto their neighbours' spacing; the data owner rejected that assumption (section spacing
+may vary), and neither the obs index prefixes (`r1_s1` … `r1_s16`, consistent with the labels) nor the
+anatomical footprint trend of the slices identifies which slices are wrong or where they belong. So:
+no correction is applied by default; `AlignmentState` gained `dz` (file units), carried through the
+section transform table, image planes, selection projection and the share link
+(`al=ord:dx,dy,rot,flags,dz`); `Sections › Align current section` has a "Shown at z" field that stores the
+difference to the file value; a manifest entry may carry `section_alignment` keyed by section name to
+make such corrections the default for a hosted dataset (`make_manifest.py` preserves it). The correct z
+values for the three slices have to come from the data owner.

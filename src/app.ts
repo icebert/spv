@@ -1440,23 +1440,6 @@ export class App {
     return s.z + (this.store.slice('layout').alignment[ordinal]?.dz ?? 0);
   }
 
-  /**
-   * Put a section back onto its neighbours' spacing: previous section z + the median step of the
-   * stack (or next − step for the first section). Records the result as a z offset.
-   */
-  snapSectionZ(ordinal: number): void {
-    const zs = this.sections.map((_, i) => this.sectionZ(i));
-    if (zs.some((z) => z === null) || zs.length < 3) return;
-    const z = zs as number[];
-    const steps = z
-      .slice(1)
-      .map((v, i) => v - z[i])
-      .sort((a, b) => a - b);
-    const step = steps[Math.floor(steps.length / 2)];
-    const target = ordinal > 0 ? z[ordinal - 1] + step : z[1] - step;
-    this.setAlignment(ordinal, { dz: Number((target - this.sections[ordinal].z!).toFixed(6)) });
-  }
-
   resetAlignment(ordinal?: number): void {
     if (ordinal === undefined) {
       this.store.update('layout', { alignment: {} });

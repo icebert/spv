@@ -25,7 +25,7 @@ data conversion: the site is plain files served by GitHub Pages.
 - Hover tooltip and click-to-pin with GPU picking (no raycasting), showing the cell index, section, the value driving the colour and up to six chosen `obs` fields.
 - Perspective or orthographic camera, presets, turntable, PNG export at 1× or 2× with optional transparent background, and a compact versioned share link that restores the whole view.
 - Actionable errors for every failure path: WebGL missing, not HDF5, not AnnData, CORS blocked, missing compression plugin, shape mismatch, image decode failure.
-- Manual section alignment (per-section XY and z offset, rotation, flips in file units, stored in the share link and optionally in the manifest, with a one-click snap of a mis-placed section's z onto its neighbours' spacing), a spatial graph overlay from `obsp/*_connectivities` that respects every point filter, the top spatially variable genes from `uns/moranI`, a Single-mode crossfade, two-gene blend colouring, lasso and box selection with CSV/TSV export (including the section column), and a histogram with draggable range handles.
+- Manual section alignment (per-section XY and z offset, rotation, flips in file units, stored in the share link and optionally in the manifest, and a per-section "shown at z" field for sections stored at a wrong z), a spatial graph overlay from `obsp/*_connectivities` that respects every point filter, the top spatially variable genes from `uns/moranI`, a Single-mode crossfade, two-gene blend colouring, lasso and box selection with CSV/TSV export (including the section column), and a histogram with draggable range handles.
 
 ## Supported `.h5ad` features and known limitations
 
@@ -55,11 +55,11 @@ native 3-D file: `obsm/spatial` has three columns and each `obs/slice` category 
 (320–618, non-uniform spacing), `X` is CSR float64 with log-normalised values, and `uns` is empty
 (no tissue images, no stored colours). SPV therefore stacks the slices at their real z, offers
 "Uniform spacing" to space them evenly instead, generates palettes for the five categorical columns,
-and builds the CSR column index on the first gene. Three slices are stored at a z that breaks the
-otherwise regular 20-unit spacing (slice3 at 355, slice5 at 398, slice8 at 461); the manifest's
-`section_alignment` shifts them to 360, 400 and 458 by default, without touching the file. The offsets
-are visible and editable in Sections › Align current section ("Snap z to neighbours" recomputes them).
-Everything about the file that needed a special case is listed in [`PLAN.md`](PLAN.md).
+and builds the CSR column index on the first gene. Slices are drawn at exactly the z stored in the
+file (spacing varies: 20, 15, 25, 18, 20, …). If a slice is known to be stored at the wrong z, type its
+correct z in Sections › Align current section › "Shown at z"; the offset is kept in the share link and can
+be made the default for a hosted dataset through the manifest's `section_alignment`. Everything about
+the file that needed a special case is listed in [`PLAN.md`](PLAN.md).
 
 ## Adding a hosted dataset
 
@@ -87,7 +87,7 @@ Manifest schema (only `id`, `name`, `url` are required; the rest are hints the r
       "default_color_by": { "type": "obs", "key": "seurat_clusters" },
       "default_tooltip_fields": ["slice", "seurat_clusters"],
       "example_genes": ["Itpr1", "Cacnb4", "Gria2"],
-      "section_alignment": { "slice3": { "dz": 5 }, "slice5": { "dz": 2 }, "slice8": { "dz": -3 } }
+      "section_alignment": { "slice3": { "dz": 0 } }
     }
   ]
 }
