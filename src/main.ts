@@ -1,169 +1,226 @@
-// Phase 2 verification page: opens a dataset through the worker and exposes the results on
-// `window.__spv` so a headless browser can compare them with data/demo.meta.json.
-// Replaced by the real viewer bootstrap in Phase 3/4.
+// Phase 3 bootstrap: loads a dataset through the worker and renders it with the point-cloud core.
+// Keyboard: L cycle layout, ←/→ step sections, R reset view, 1/2/3 top/front/side, 4 iso,
+// O orthographic, G colour by a gene, C colour by cluster, A auto-rotate.
+// Exposes `window.__spv` for the E2E tests. The full UI arrives in Phase 4.
+import { colormapLUT } from './color/colormaps';
+import { paletteFor } from './color/palettes';
 import { H5adClient } from './h5ad/client';
+import { defaultColorColumn } from './h5ad/reader';
 import type { OpenSource } from './h5ad/rpc';
-import type { ColumnData, GeneVector, ProgressEvent, SpatialData, Summary } from './h5ad/types';
+import type { ProgressEvent, SpatialData, Summary } from './h5ad/types';
+import { PointCloud } from './render/points';
+import { Viewer } from './render/scene';
+import {
+  DEFAULT_LAYOUT,
+  LAYOUT_MODES,
+  SectionTable,
+  defaultSpacing,
+  sectionGeoms,
+  type LayoutMode,
+  type LayoutParams,
+} from './render/sections';
 
-interface DebugState {
-  status: 'idle' | 'loading' | 'ready' | 'error';
-  error: string | null;
-  progress: ProgressEvent[];
-  open: unknown;
-  summary: Summary | null;
-  spatial: Omit<SpatialData, 'xyz' | 'valid' | 'sectionOf'> | null;
-  xyzChecksum: [number, number, number] | null;
-  column: { name: string; nCategories: number; counts: Record<string, number> } | null;
-  gene: {
-    name: string;
-    index: number;
-    nnz: number;
-    sum: number;
-    max: number;
-    firstNonzero: [number, number][];
-  } | null;
-  varNames: number;
-  timings: Record<string, number>;
-  loadStats: unknown;
-  client: H5adClient | null;
-  run: (src: OpenSource, genes?: string[]) => Promise<void>;
-}
-
-const dbg: DebugState = {
-  status: 'idle',
-  error: null,
-  progress: [],
-  open: null,
-  summary: null,
-  spatial: null,
-  xyzChecksum: null,
-  column: null,
-  gene: null,
-  varNames: 0,
-  timings: {},
-  loadStats: null,
-  client: null,
-  run: async () => {},
-};
-(window as unknown as { __spv: DebugState }).__spv = dbg;
+void colormapLUT;
 
 const app = document.getElementById('app')!;
-app.innerHTML = `
-  <main style="font-family: system-ui, sans-serif; padding: 1.5rem; max-width: 60rem;">
-    <h1 style="margin:0"><span class="spv-wordmark">SPV</span> <small style="font-weight:normal;opacity:.7">Spatial Viewer</small></h1>
-    <p>Phase 2 reader check. <input id="spv-file" type="file" accept=".h5ad,.h5" /></p>
-    <pre id="spv-log" style="white-space:pre-wrap;font-size:12px"></pre>
-  </main>`;
-const logEl = document.getElementById('spv-log')!;
-const log = (s: string) => {
-  logEl.textContent += s + '\n';
-};
+app.style.cssText =
+  'position:fixed;inset:0;overflow:hidden;background:#0f1115;color:#e5e7eb;font:13px system-ui,sans-serif';
+const canvasHost = document.createElement('div');
+canvasHost.style.cssText = 'position:absolute;inset:0';
+app.appendChild(canvasHost);
+const status = document.createElement('div');
+status.style.cssText =
+  'position:absolute;left:12px;top:12px;padding:8px 12px;background:rgba(15,17,21,.8);border-radius:8px;max-width:60ch;white-space:pre-wrap;pointer-events:none';
+app.appendChild(status);
+const say = (s: string) => (status.textContent = s);
 
-dbg.run = async (source: OpenSource, genes: string[] = []) => {
-  dbg.status = 'loading';
-  dbg.error = null;
-  dbg.progress = [];
-  const client = dbg.client ?? new H5adClient();
-  dbg.client = client;
-  client.onLog = (level, message) => log(`[${level}] ${message}`);
-  const onProgress = (p: ProgressEvent) => {
-    dbg.progress.push(p);
-    if (p.done === p.total || p.message)
-      log(`progress ${p.stage} ${p.done}/${p.total} ${p.message ?? ''}`);
-  };
-  try {
-    let t = performance.now();
-    const opened = await client.call('open', source, { onProgress });
-    dbg.timings.open = performance.now() - t;
-    dbg.open = {
-      loadMode: opened.loadMode,
-      bytesTotal: opened.bytesTotal,
-      timings: opened.timings,
-      plugins: opened.pluginsInstalled,
-    };
-    dbg.summary = opened.summary;
-    log(
-      `opened (${opened.loadMode}) n_obs=${opened.summary.nObs} n_vars=${opened.summary.nVars} in ${dbg.timings.open.toFixed(0)} ms`,
-    );
-    for (const f of opened.summary.flags) log(`  ! ${f}`);
-    t = performance.now();
-    const spatial = await client.call('getSpatial', null, { onProgress });
-    dbg.timings.spatial = performance.now() - t;
-    const { xyz, valid, sectionOf, ...rest } = spatial;
-    void valid;
-    void sectionOf;
-    dbg.spatial = rest;
-    const sums: [number, number, number] = [0, 0, 0];
-    for (let i = 0; i < spatial.n; i++)
-      for (let a = 0; a < 3; a++) sums[a] += xyz[i * 3 + a] / spatial.scale + spatial.center[a];
-    dbg.xyzChecksum = sums;
-    log(
-      `spatial ${spatial.ndim}-D, ${spatial.sections.length} sections (${spatial.orderSource}), dropped ${spatial.nDropped}, ${dbg.timings.spatial.toFixed(0)} ms`,
-    );
-    t = performance.now();
-    const names = await client.call('getVarNames', null);
-    dbg.varNames = names.length;
-    dbg.timings.varNames = performance.now() - t;
-    const libCol = opened.summary.library.column;
-    if (libCol) {
-      t = performance.now();
-      const col: ColumnData = await client.call('getObsColumn', libCol);
-      dbg.timings.column = performance.now() - t;
-      if (col.kind === 'categorical') {
-        const counts: Record<string, number> = {};
-        for (let i = 0; i < col.codes.length; i++) {
-          const c = col.codes[i];
-          const k = c < 0 ? 'NA' : col.categories[c];
-          counts[k] = (counts[k] ?? 0) + 1;
-        }
-        dbg.column = { name: libCol, nCategories: col.categories.length, counts };
-      }
-    }
-    for (const g of genes) {
-      const j = names.indexOf(g);
-      if (j < 0) continue;
-      t = performance.now();
-      const gv: GeneVector = await client.call(
-        'getGeneVector',
-        { matrix: 'X', index: j },
-        { onProgress },
-      );
-      dbg.timings[`gene:${g}`] = performance.now() - t;
-      let sum = 0;
-      const first: [number, number][] = [];
-      for (let i = 0; i < gv.values.length; i++) {
-        const v = gv.values[i];
-        if (v !== 0) {
-          sum += v;
-          if (first.length < 5) first.push([i, v]);
-        }
-      }
-      dbg.gene = { name: g, index: j, nnz: gv.nnz, sum, max: gv.max, firstNonzero: first };
-      log(
-        `gene ${g} (col ${j}) nnz=${gv.nnz} sum=${sum.toFixed(3)} max=${gv.max.toFixed(4)} in ${dbg.timings[`gene:${g}`].toFixed(0)} ms`,
-      );
-    }
-    dbg.loadStats = await client.call('getLoadStats', null);
-    log(`load stats ${JSON.stringify(dbg.loadStats)}`);
-    dbg.status = 'ready';
-  } catch (err) {
-    dbg.status = 'error';
-    dbg.error = (err as Error).message;
-    log(`ERROR ${(err as Error).name}: ${(err as Error).message}`);
-  }
-};
-
-document.getElementById('spv-file')!.addEventListener('change', (e) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (file) void dbg.run({ kind: 'file', file }, ['Itpr1']);
-});
-
-const hash = new URLSearchParams(location.hash.slice(1));
-const ds = hash.get('dataset');
-const url = hash.get('url');
-if (ds || url) {
-  const base = import.meta.env.BASE_URL;
-  const target = url ?? `${base}data/${ds}.h5ad`;
-  const mode = (hash.get('mode') as 'auto' | 'lazy' | 'full' | null) ?? 'auto';
-  void dbg.run({ kind: 'url', url: target, mode }, (hash.get('genes') ?? 'Itpr1').split(','));
+interface Debug {
+  ready: boolean;
+  error: string | null;
+  summary: Summary | null;
+  spatial: Omit<SpatialData, 'xyz' | 'valid' | 'sectionOf'> | null;
+  layout: LayoutParams | null;
+  setLayout: (mode: LayoutMode) => void;
+  step: (delta: number) => void;
+  colorByGene: (name: string) => Promise<void>;
+  colorByColumn: (name: string) => Promise<void>;
+  info: () => unknown;
+  viewer: Viewer | null;
+  timings: Record<string, number>;
 }
+const dbg: Debug = {
+  ready: false,
+  error: null,
+  summary: null,
+  spatial: null,
+  layout: null,
+  setLayout: () => {},
+  step: () => {},
+  colorByGene: async () => {},
+  colorByColumn: async () => {},
+  info: () => null,
+  viewer: null,
+  timings: {},
+};
+(window as unknown as { __spv: Debug }).__spv = dbg;
+
+async function main(): Promise<void> {
+  const viewer = new Viewer(canvasHost);
+  dbg.viewer = viewer;
+  const client = new H5adClient();
+  const hash = new URLSearchParams(location.hash.slice(1));
+  const base = import.meta.env.BASE_URL;
+  let source: OpenSource;
+  if (hash.get('url')) source = { kind: 'url', url: hash.get('url')! };
+  else {
+    const manifest = (await (await fetch(`${base}data/datasets.json`)).json()) as {
+      datasets: { id: string; url: string }[];
+    };
+    const id = hash.get('dataset') ?? manifest.datasets[0]?.id;
+    const entry = manifest.datasets.find((d) => d.id === id);
+    if (!entry) throw new Error(`Unknown dataset ${id}`);
+    source = { kind: 'url', url: /^https?:/.test(entry.url) ? entry.url : `${base}${entry.url}` };
+  }
+  const onProgress = (p: ProgressEvent) =>
+    say(`${p.stage} ${p.total ? Math.round((100 * p.done) / p.total) : ''}% ${p.message ?? ''}`);
+  const t0 = performance.now();
+  const opened = await client.call('open', source, { onProgress });
+  dbg.summary = opened.summary;
+  dbg.timings.open = performance.now() - t0;
+  const spatial = await client.call('getSpatial', null, { onProgress });
+  dbg.timings.spatial = performance.now() - t0;
+  const { xyz, valid, sectionOf, ...rest } = spatial;
+  dbg.spatial = rest;
+
+  const geoms = sectionGeoms(spatial.sections, spatial.center, spatial.scale);
+  const table = new SectionTable(geoms);
+  const layout: LayoutParams = {
+    ...DEFAULT_LAYOUT,
+    spacing: defaultSpacing(geoms),
+    hidden: new Set(),
+    alignment: new Map(),
+  };
+  dbg.layout = layout;
+  const pc = new PointCloud({ n: spatial.n, xyz, valid, sectionOf }, table);
+  viewer.setPointCloud(pc);
+  const applyLayout = (fit: boolean) => {
+    const res = table.apply(layout);
+    pc.setNativeZ(res.nativeZ);
+    pc.setExplode(layout.explode, (res.bounds.min[2] + res.bounds.max[2]) / 2);
+    if (res.planar) viewer.rig.setOrthographic(true);
+    viewer.setBounds(res.bounds, fit, res.planar ? 'top' : 'iso', res.planar);
+  };
+  applyLayout(true);
+  dbg.timings.firstRender = performance.now() - t0;
+
+  const names = await client.call('getVarNames', null);
+  dbg.colorByColumn = async (name: string) => {
+    const col = await client.call('getObsColumn', name);
+    if (col.kind === 'categorical') {
+      const fileColors = await client.call('getCategoryColors', {
+        column: name,
+        n: col.categories.length,
+      });
+      pc.setCodes(col.codes);
+      pc.setPalette(paletteFor(col.categories.length, fileColors));
+      pc.setColorMode('category');
+      say(
+        `${opened.summary.nObs.toLocaleString()} cells · ${spatial.sections.length} sections · colour: ${name} (${col.categories.length} categories)`,
+      );
+    } else {
+      pc.setScalar(col.values);
+      pc.setColormap('viridis');
+      pc.setRange(col.quantiles[0], col.quantiles[995]);
+      pc.setColorMode('scalar');
+      say(`colour: ${name} (numeric)`);
+    }
+    viewer.requestRender();
+  };
+  dbg.colorByGene = async (gene: string) => {
+    const j = names.indexOf(gene);
+    if (j < 0) {
+      say(`gene ${gene} not found`);
+      return;
+    }
+    const t = performance.now();
+    const gv = await client.call('getGeneVector', { matrix: 'X', index: j }, { onProgress });
+    pc.setScalar(gv.values);
+    pc.setColormap('viridis');
+    pc.setRange(gv.quantiles[0], gv.quantiles[995]);
+    pc.setColorMode('scalar');
+    viewer.requestRender();
+    say(
+      `colour: gene ${gene} (nnz ${gv.nnz.toLocaleString()}, ${(performance.now() - t).toFixed(0)} ms)`,
+    );
+  };
+  const defaultCol = defaultColorColumn(opened.summary.obs, opened.summary.library.column);
+  if (defaultCol) await dbg.colorByColumn(defaultCol);
+  pc.setPointSize(2.5);
+
+  dbg.setLayout = (mode) => {
+    layout.mode = mode;
+    layout.dimOthers = false;
+    if (!(mode === 'tile' || mode === 'single')) viewer.rig.setOrthographic(false);
+    applyLayout(true);
+  };
+  dbg.step = (delta) => {
+    const n = spatial.sections.length;
+    if (!n) return;
+    layout.current = (layout.current + delta + n) % n;
+    if (layout.mode !== 'single') layout.dimOthers = true;
+    applyLayout(false);
+    say(`section ${spatial.sections[layout.current].name} (${layout.current + 1}/${n})`);
+  };
+  dbg.info = () => ({
+    ...viewer.info(),
+    visible: pc.visibleCount,
+    layout: layout.mode,
+    current: layout.current,
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement) return;
+    switch (e.key) {
+      case 'l':
+        dbg.setLayout(LAYOUT_MODES[(LAYOUT_MODES.indexOf(layout.mode) + 1) % LAYOUT_MODES.length]);
+        break;
+      case 'ArrowLeft':
+        dbg.step(-1);
+        break;
+      case 'ArrowRight':
+        dbg.step(1);
+        break;
+      case 'r':
+        viewer.rig.reset();
+        viewer.requestRender();
+        break;
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+        viewer.rig.preset((['top', 'front', 'side', 'iso'] as const)[Number(e.key) - 1]);
+        viewer.requestRender();
+        break;
+      case 'o':
+        viewer.rig.setOrthographic(!viewer.rig.isOrthographic);
+        viewer.requestRender();
+        break;
+      case 'g':
+        void dbg.colorByGene(names[Math.floor(Math.random() * names.length)]);
+        break;
+      case 'c':
+        if (defaultCol) void dbg.colorByColumn(defaultCol);
+        break;
+      case 'a':
+        viewer.rig.autoRotate = !viewer.rig.autoRotate;
+        viewer.requestRender();
+        break;
+    }
+  });
+  dbg.ready = true;
+}
+
+main().catch((err: Error) => {
+  dbg.error = err.message;
+  say(`Error: ${err.message}`);
+  console.error(err);
+});
