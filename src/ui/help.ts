@@ -12,6 +12,7 @@ const SHORTCUTS: [string, string][] = [
   ['I', 'Toggle tissue images'],
   ['L', 'Cycle layout mode'],
   ['O', 'Toggle orthographic camera'],
+  ['X', 'Toggle lasso / box selection mode (Shift-drag for a box)'],
   ['Esc', 'Clear selection / close dialogs'],
 ];
 

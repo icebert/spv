@@ -14,7 +14,67 @@ import {
   textInput,
   virtualList,
 } from '../dom';
+import { histogramWidget } from '../histogram';
 import type { Panel } from '../sidebar';
+
+/** Compact gene autocomplete used for the blend gene. */
+function geneSearch(
+  app: App,
+  placeholder: string,
+  value: string,
+  onPick: (name: string) => void,
+): HTMLElement {
+  const wrap = el('div', { className: 'spv-autocomplete', style: 'flex:1;min-width:120px' });
+  const list = el('div', { className: 'spv-autocomplete-list', style: 'display:none' });
+  let results: { index: number; name: string }[] = [];
+  let timer = 0;
+  const pick = (name: string) => {
+    input.value = name;
+    list.style.display = 'none';
+    onPick(name);
+  };
+  const show = (q: string) => {
+    results = app.searchGenes(q, 30);
+    clear(list);
+    if (!results.length) {
+      list.style.display = 'none';
+      return;
+    }
+    for (const r of results) {
+      list.appendChild(
+        el(
+          'div',
+          {
+            className: 'spv-autocomplete-item',
+            onMousedown: (e: Event) => {
+              e.preventDefault();
+              pick(r.name);
+            },
+          },
+          el('span', null, r.name),
+        ),
+      );
+    }
+    list.style.display = 'block';
+  };
+  const input = textInput(
+    placeholder,
+    (v) => {
+      if (v && app.varDisplay.includes(v)) pick(v);
+      else if (results.length) pick(results[0].name);
+    },
+    {
+      value,
+      onInput: (v) => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => show(v), 120);
+      },
+    },
+  );
+  input.addEventListener('blur', () => setTimeout(() => (list.style.display = 'none'), 150));
+  wrap.append(input, list);
+  return wrap;
+}
 
 export function colorPanel(app: App): Panel {
   const root = el('div');
@@ -134,6 +194,43 @@ export function colorPanel(app: App): Panel {
     input.addEventListener('focus', () => input.value && show(input.value));
     wrap.append(input, list);
     geneBox.appendChild(wrap);
+    if (c.source === 'gene' && c.key) {
+      const b = geneSearch(app, 'Blend with a second gene…', c.gene2 ?? '', (name) =>
+        app.blendWithGene(name),
+      );
+      const colA = el('input', {
+        type: 'color',
+        value: c.blendColors[0],
+        title: `${c.key} colour`,
+      });
+      const colB = el('input', {
+        type: 'color',
+        value: c.blendColors[1],
+        title: 'second gene colour',
+      });
+      const setColors = () => app.store.update('color', { blendColors: [colA.value, colB.value] });
+      colA.addEventListener('input', setColors);
+      colB.addEventListener('input', setColors);
+      geneBox.appendChild(
+        el(
+          'div',
+          'spv-row',
+          el('span', 'spv-slider-label', 'Blend'),
+          b,
+          colA,
+          colB,
+          c.gene2
+            ? button('Clear', () => app.blendWithGene(null), { className: 'spv-small' })
+            : null,
+        ),
+      );
+      if (c.gene2)
+        geneBox.appendChild(
+          note(
+            `${c.key} → first colour, ${c.gene2} → second colour; co-expression mixes them additively. Ranges follow the percentile / min-max settings below.`,
+          ),
+        );
+    }
     if (matrices.length > 1)
       geneBox.appendChild(
         el(
@@ -294,6 +391,32 @@ export function colorPanel(app: App): Panel {
     const c = app.store.slice('color');
     if (!cb) return;
     const g = group(`Range — ${cb.label}`);
+    if (cb.blend) {
+      g.appendChild(
+        el(
+          'div',
+          'spv-row',
+          el('span', { className: 'spv-swatch', style: `background:${cb.blend.colorA}` }),
+          el(
+            'span',
+            null,
+            `${cb.blend.nameA}: ${cb.vmin.toPrecision(3)} – ${cb.vmax.toPrecision(3)}`,
+          ),
+        ),
+      );
+      g.appendChild(
+        el(
+          'div',
+          'spv-row',
+          el('span', { className: 'spv-swatch', style: `background:${cb.blend.colorB}` }),
+          el(
+            'span',
+            null,
+            `${cb.blend.nameB}: ${cb.blend.vminB.toPrecision(3)} – ${cb.blend.vmaxB.toPrecision(3)}`,
+          ),
+        ),
+      );
+    }
     g.appendChild(
       el(
         'div',
@@ -307,12 +430,15 @@ export function colorPanel(app: App): Panel {
         checkbox('reversed', c.reversed, (v) => app.store.update('color', { reversed: v })),
       ),
     );
-    g.appendChild(
-      el('div', {
-        className: 'spv-colorbar',
-        style: `background:${colormapCss(c.colormap, c.reversed)};margin:4px 0`,
-      }),
-    );
+    if (!cb.blend) {
+      g.appendChild(
+        el('div', {
+          className: 'spv-colorbar',
+          style: `background:${colormapCss(c.colormap, c.reversed)};margin:4px 0`,
+        }),
+      );
+      g.appendChild(histogramWidget(app));
+    }
     g.appendChild(
       radio(
         'spv-range',
@@ -394,7 +520,10 @@ export function colorPanel(app: App): Panel {
     if (
       v.matrix !== prev.matrix ||
       v.log1p !== prev.log1p ||
-      v.geneNameColumn !== prev.geneNameColumn
+      v.geneNameColumn !== prev.geneNameColumn ||
+      v.gene2 !== prev.gene2 ||
+      v.source !== prev.source ||
+      v.key !== prev.key
     )
       renderGene();
     if (

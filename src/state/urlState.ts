@@ -118,6 +118,13 @@ export function serializeState(s: ViewerState): string {
     p.set('c', `${col.source}:${col.key}`);
     if (col.source === 'gene' && col.matrix !== 'X') p.set('mat', col.matrix);
     if (col.log1p) p.set('log', '1');
+    if (col.source === 'gene' && col.gene2) p.set('c2', col.gene2);
+  }
+  if (
+    col.blendColors[0] !== d.color.blendColors[0] ||
+    col.blendColors[1] !== d.color.blendColors[1]
+  ) {
+    p.set('bc', col.blendColors.map((c) => c.replace('#', '')).join(','));
   }
   if (col.colormap !== d.color.colormap) p.set('cm', col.colormap);
   if (col.reversed) p.set('cmr', '1');
@@ -228,6 +235,10 @@ export function parseState(hash: string): { state: ViewerState; version: number 
     }
   }
   if (p.has('mat')) s.color.matrix = p.get('mat')!;
+  if (p.has('c2') && s.color.source === 'gene') s.color.gene2 = p.get('c2');
+  const bc = p.get('bc')?.split(',');
+  if (bc && bc.length === 2 && bc.every((c) => /^[0-9a-f]{6}$/i.test(c)))
+    s.color.blendColors = [`#${bc[0]}`, `#${bc[1]}`];
   s.color.log1p = p.get('log') === '1';
   const cm = p.get('cm');
   if (cm && (COLORMAP_NAMES as readonly string[]).includes(cm))

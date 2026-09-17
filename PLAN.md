@@ -143,3 +143,26 @@ Would make gene switching an `indptr` slice instead of a full `indices` scan and
   gained support for anndata ≥ 0.11 `nullable-string-array` indexes/columns (current anndata writes
   them; the demo does not use them).
 - **Nice-to-haves (§7.3)** are the remaining work, in the spec's order.
+
+## 9. Nice-to-haves (§7.3) — all seven implemented, in the spec's order
+
+1. **Manual alignment**: `layout.alignment[ordinal] = {dx, dy, rot, fx, fy}` in file units/degrees, converted
+   to the display frame and fed to the existing per-section transform table (points, edges and image
+   planes all follow); numeric inputs + nudge buttons in the Sections panel; `al=` in the URL.
+2. **Spatial graph overlay**: `src/render/edges.ts` — `LineSegments` whose vertex shader transforms both
+   endpoints with the point uniforms and hides an edge when either endpoint is hidden (section alpha,
+   clip, category mask, user filter). Key, colour, opacity and edge cap in Appearance; `gr=`, `gc=`,
+   `go=`, `ge=` in the URL. 141,631 edges for the 40k synthetic file load in ~0.3 s.
+3. **Top spatially variable genes**: `uns/moranI` sorted by I in the Color panel (click to colour).
+4. **Crossfade**: 220 ms smoothstep on the two sections' table alphas in Single mode (`cf=0` disables).
+5. **Two-gene blend**: second scalar attribute + `uColorMode = 3`; additive mixing of two user colours
+   with per-gene percentile/absolute ranges; `c2=` and `bc=` in the URL; tooltip shows both values.
+6. **Lasso / box selection + export**: CPU re-projection of the visible points with the shader math,
+   point-in-polygon test, `aSelected` attribute dims the rest; CSV/TSV with `cell_index,row,section`,
+   tooltip fields and the coloured gene(s). The worker reads the whole obs index once for large
+   exports (`getObsIndex` > 256 rows).
+7. **Histogram**: 64 bins of the current variable under the colorbar with draggable min/max handles
+   that switch the range to explicit values.
+
+Bug found while wiring these: the Color panel did not re-render its gene controls when the blend gene
+changed (caught by the E2E test). Total E2E: 15 tests (one skipped without the synthetic file).

@@ -15,6 +15,8 @@ in float aSection;
 in float aScalar;
 in float aCode;
 in float aVisible;
+in float aScalar2;
+in float aSelected;
 
 uniform sampler2D uSectionTex;
 uniform float uSectionCount;
@@ -33,11 +35,13 @@ uniform float uViewportHeight;
 uniform float uPixelRatio;
 uniform float uHighlightId;
 uniform float uHoverId;
-uniform int uColorMode;      // 0 scalar, 1 category, 2 uniform
+uniform int uColorMode;      // 0 scalar, 1 category, 2 uniform, 3 two-gene blend
 uniform sampler2D uPalette;
 uniform vec2 uPaletteDims;
+uniform float uSelectionActive;
 
 out float vScalar;
+out float vScalar2;
 out float vCode;
 out float vAlpha;
 out float vHighlight;
@@ -55,6 +59,7 @@ float paletteAlpha(float code) {
 void main() {
   vId = gl_VertexID;
   vScalar = aScalar;
+  vScalar2 = aScalar2;
   vCode = aCode;
   vec3 p = position * uFlip;
   if (uSwapYZ > 0.5) p = p.xzy;
@@ -82,7 +87,7 @@ void main() {
     vHighlight = 0.0;
     return;
   }
-  vAlpha = alpha;
+  vAlpha = alpha * ((uSelectionActive > 0.5 && aSelected < 0.5) ? 0.12 : 1.0);
   vec4 mv = modelViewMatrix * vec4(q, 1.0);
   gl_Position = projectionMatrix * mv;
   bool perspective = projectionMatrix[2][3] == -1.0;
@@ -106,6 +111,7 @@ void main() {
 export const POINTS_FRAGMENT = /* glsl */ `
 
 in float vScalar;
+in float vScalar2;
 in float vCode;
 in float vAlpha;
 in float vHighlight;
@@ -114,6 +120,9 @@ flat in int vId;
 uniform int uColorMode;
 uniform sampler2D uColormap;
 uniform vec2 uRange;
+uniform vec2 uRange2;
+uniform vec3 uBlendA;
+uniform vec3 uBlendB;
 uniform sampler2D uPalette;
 uniform vec2 uPaletteDims;
 uniform vec3 uNanColor;
@@ -151,6 +160,12 @@ void main() {
       vec2 uv = vec2((mod(vCode, uPaletteDims.x) + 0.5) / uPaletteDims.x, (floor(vCode / uPaletteDims.x) + 0.5) / uPaletteDims.y);
       color = texture(uPalette, uv).rgb;
     }
+  } else if (uColorMode == 3) {
+    float tA = clamp((vScalar - uRange.x) / max(uRange.y - uRange.x, 1e-30), 0.0, 1.0);
+    float tB = clamp((vScalar2 - uRange2.x) / max(uRange2.y - uRange2.x, 1e-30), 0.0, 1.0);
+    if (isnan(vScalar)) tA = 0.0;
+    if (isnan(vScalar2)) tB = 0.0;
+    color = max(clamp(uBlendA * tA + uBlendB * tB, 0.0, 1.0), vec3(0.09));
   } else {
     color = uUniformColor;
   }

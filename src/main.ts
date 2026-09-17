@@ -11,6 +11,7 @@ import { datasetPanel } from './ui/panels/dataset';
 import { filterPanel } from './ui/panels/filter';
 import { infoPanel } from './ui/panels/info';
 import { sectionsPanel } from './ui/panels/sections';
+import { createSelection } from './ui/selection';
 import { createSidebar } from './ui/sidebar';
 import { toast } from './ui/toast';
 import { createTooltip } from './ui/tooltip';
@@ -82,6 +83,10 @@ function main(): void {
       bytes: app.planes?.totalBytes() ?? 0,
     },
     graph: app.graphStatus,
+    selection: app.selectionCount,
+    histogram: app.histogram
+      ? { bins: Array.from(app.histogram.bins), lo: app.histogram.lo, hi: app.histogram.hi }
+      : null,
     alignment: app.store.slice('layout').alignment,
     renderer: app.viewer.info(),
     loadInfo: app.loadInfo,
@@ -108,6 +113,7 @@ function main(): void {
   root.append(createTopbar(app), createSidebar(app, panels), viewport);
   createTooltip(app);
   createColorbar(app, viewport);
+  createSelection(app, viewport, app.viewer.renderer.domElement);
   const notice = el('div', { className: 'spv-overlay-notice', style: 'display:none' });
   viewport.appendChild(notice);
   const drop = el('div', 'spv-drop', 'Drop a .h5ad file to open it');
@@ -141,7 +147,7 @@ function main(): void {
     33,
   );
   canvas.addEventListener('pointermove', (e) => {
-    if (e.buttons) return;
+    if (e.buttons || app.selectMode) return;
     const r = canvas.getBoundingClientRect();
     hover(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY);
   });
@@ -149,7 +155,12 @@ function main(): void {
   let downAt: [number, number] | null = null;
   canvas.addEventListener('pointerdown', (e) => (downAt = [e.clientX, e.clientY]));
   canvas.addEventListener('pointerup', (e) => {
-    if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 || e.button !== 0)
+    if (
+      app.selectMode ||
+      !downAt ||
+      Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4 ||
+      e.button !== 0
+    )
       return;
     const r = canvas.getBoundingClientRect();
     void app.pin(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY);
@@ -231,6 +242,12 @@ function main(): void {
         break;
       case 'Escape':
         app.clearPin();
+        if (app.selectionCount) app.clearSelection();
+        else if (app.selectMode) app.setSelectMode(false);
+        break;
+      case 'x':
+      case 'X':
+        app.setSelectMode(!app.selectMode);
         break;
       case '?':
         openHelp();

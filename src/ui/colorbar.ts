@@ -26,22 +26,42 @@ export function createColorbar(app: App, host: HTMLElement): void {
         cb.label,
       ),
     );
-    root.appendChild(
-      el('div', {
-        className: 'spv-colorbar',
-        style: `background:${colormapCss(cb.colormap, cb.reversed)}`,
-      }),
-    );
-    const mid = (cb.vmin + cb.vmax) / 2;
-    root.appendChild(
-      el(
-        'div',
-        'spv-colorbar-ticks',
-        el('span', null, formatValue(cb.vmin)),
-        el('span', null, formatValue(mid)),
-        el('span', null, formatValue(cb.vmax)),
-      ),
-    );
+    if (cb.blend) {
+      const rowStyle = 'display:flex;align-items:center;gap:6px;font-size:12px';
+      root.appendChild(
+        el(
+          'div',
+          { style: rowStyle },
+          el('span', { className: 'spv-swatch', style: `background:${cb.blend.colorA}` }),
+          `${cb.blend.nameA} ${formatValue(cb.vmin)} – ${formatValue(cb.vmax)}`,
+        ),
+      );
+      root.appendChild(
+        el(
+          'div',
+          { style: rowStyle },
+          el('span', { className: 'spv-swatch', style: `background:${cb.blend.colorB}` }),
+          `${cb.blend.nameB} ${formatValue(cb.blend.vminB)} – ${formatValue(cb.blend.vmaxB)}`,
+        ),
+      );
+    } else {
+      root.appendChild(
+        el('div', {
+          className: 'spv-colorbar',
+          style: `background:${colormapCss(cb.colormap, cb.reversed)}`,
+        }),
+      );
+      const mid = (cb.vmin + cb.vmax) / 2;
+      root.appendChild(
+        el(
+          'div',
+          'spv-colorbar-ticks',
+          el('span', null, formatValue(cb.vmin)),
+          el('span', null, formatValue(mid)),
+          el('span', null, formatValue(cb.vmax)),
+        ),
+      );
+    }
     root.appendChild(
       el(
         'div',

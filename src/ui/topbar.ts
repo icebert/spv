@@ -60,6 +60,12 @@ export function createTopbar(app: App): HTMLElement {
     },
     { title: 'Copy a link that restores this view' },
   );
+  const selectBtn = button('Select', () => app.setSelectMode(!app.selectMode), {
+    title: 'Lasso / box selection (X). Drag on the view; Shift-drag for a box.',
+  });
+  app.on((e) => {
+    if (e.type === 'selection') selectBtn.classList.toggle('spv-primary', app.selectMode);
+  });
   const help = button('?', openHelp, { className: 'spv-icon', title: 'Help' });
   const toggle = button(
     '☰',
@@ -78,6 +84,7 @@ export function createTopbar(app: App): HTMLElement {
     ),
     name,
     sectionName,
+    selectBtn,
     shotWrap,
     share,
     help,

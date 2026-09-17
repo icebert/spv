@@ -24,7 +24,7 @@ import { colormapLUT, hexToRgb, type ColormapName } from '../color/colormaps';
 import { POINTS_FRAGMENT, POINTS_VERTEX } from './pointsMaterial.glsl';
 import type { SectionTable } from './sections';
 
-export type ColorMode = 'scalar' | 'category' | 'uniform';
+export type ColorMode = 'scalar' | 'category' | 'uniform' | 'blend';
 export type SizeMode = 'screen' | 'attenuated' | 'world';
 export type SpriteShape = 'round' | 'square';
 
@@ -71,6 +71,8 @@ export class PointCloud {
     g.setAttribute('aScalar', new BufferAttribute(new Float32Array(src.n).fill(NaN), 1));
     g.setAttribute('aCode', new BufferAttribute(new Float32Array(src.n).fill(-1), 1));
     g.setAttribute('aVisible', new BufferAttribute(new Uint8Array(src.valid), 1));
+    g.setAttribute('aScalar2', new BufferAttribute(new Float32Array(src.n).fill(NaN), 1));
+    g.setAttribute('aSelected', new BufferAttribute(new Uint8Array(src.n), 1));
     // Positions live in a unit cube; a fixed bounding sphere avoids NaN-sensitive recomputation.
     g.boundingSphere = new Sphere(new Vector3(), 4);
     this.geometry = g;
@@ -104,6 +106,10 @@ export class PointCloud {
       uColorMode: { value: 2 },
       uColormap: { value: this.colormapTex },
       uRange: { value: new Vector2(0, 1) },
+      uRange2: { value: new Vector2(0, 1) },
+      uBlendA: { value: new Color(1, 0, 1) },
+      uBlendB: { value: new Color(0, 1, 0) },
+      uSelectionActive: { value: 0 },
       uPalette: { value: this.paletteTex },
       uPaletteDims: { value: new Vector2(1, 1) },
       uNanColor: { value: new Color(0.45, 0.45, 0.45) },
@@ -182,7 +188,37 @@ export class PointCloud {
   }
 
   setColorMode(mode: ColorMode): void {
-    this.uniforms.uColorMode.value = mode === 'scalar' ? 0 : mode === 'category' ? 1 : 2;
+    this.uniforms.uColorMode.value =
+      mode === 'scalar' ? 0 : mode === 'category' ? 1 : mode === 'blend' ? 3 : 2;
+  }
+
+  /** Second continuous variable for two-gene blending. */
+  setScalar2(values: ArrayLike<number> | null): void {
+    const a = this.attr('aScalar2');
+    const arr = a.array as Float32Array;
+    if (values) arr.set(values as ArrayLike<number>);
+    else arr.fill(NaN);
+    a.needsUpdate = true;
+  }
+
+  setRange2(min: number, max: number): void {
+    if (!(max > min)) max = min + 1;
+    (this.uniforms.uRange2.value as Vector2).set(min, max);
+  }
+
+  setBlendColors(a: string, b: string): void {
+    (this.uniforms.uBlendA.value as Color).set(a);
+    (this.uniforms.uBlendB.value as Color).set(b);
+  }
+
+  /** Selection mask (1 = selected); null clears and turns dimming off. */
+  setSelection(mask: Uint8Array | null): void {
+    const a = this.attr('aSelected');
+    const arr = a.array as Uint8Array;
+    if (mask) arr.set(mask);
+    else arr.fill(0);
+    a.needsUpdate = true;
+    this.uniforms.uSelectionActive.value = mask ? 1 : 0;
   }
 
   setColormap(name: ColormapName, reversed = false): void {

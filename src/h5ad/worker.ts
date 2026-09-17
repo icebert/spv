@@ -89,6 +89,7 @@ interface OpenState {
   bytesTotal: number | null;
   cache: MatrixCache;
   columns: Map<string, ColumnData>;
+  indexAll?: string[];
 }
 
 let state: OpenState | null = null;
@@ -526,7 +527,11 @@ const handlers: {
   getCategoryColors: (_id, req) => readCategoryColors(requireState().src, req.column, req.n),
   getObsIndex: (_id, rows) => {
     const st = requireState();
-    return readIndexRows(st.src, st.summary.obs, rows);
+    if (rows.length <= 256) return readIndexRows(st.src, st.summary.obs, rows);
+    // Large selections: read the whole index once and keep it for the dataset's lifetime.
+    st.indexAll ??= readIndex(st.src, st.summary.obs);
+    const all = st.indexAll;
+    return rows.map((r) => all[r] ?? String(r));
   },
   getLoadStats: () => {
     const st = state;

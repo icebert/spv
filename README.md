@@ -25,6 +25,7 @@ data conversion: the site is plain files served by GitHub Pages.
 - Hover tooltip and click-to-pin with GPU picking (no raycasting), showing the cell index, section, the value driving the colour and up to six chosen `obs` fields.
 - Perspective or orthographic camera, presets, turntable, PNG export at 1× or 2× with optional transparent background, and a compact versioned share link that restores the whole view.
 - Actionable errors for every failure path: WebGL missing, not HDF5, not AnnData, CORS blocked, missing compression plugin, shape mismatch, image decode failure.
+- Manual section alignment (per-section offset, rotation, flips in file units, stored in the share link), a spatial graph overlay from `obsp/*_connectivities` that respects every point filter, the top spatially variable genes from `uns/moranI`, a Single-mode crossfade, two-gene blend colouring, lasso and box selection with CSV/TSV export (including the section column), and a histogram with draggable range handles.
 
 ## Supported `.h5ad` features and known limitations
 
@@ -40,7 +41,8 @@ Supported:
 
 Limitations:
 
-- The spatial graph overlay, Moran's I gene list, manual section alignment, crossfade, two-gene blending, lasso selection and the range histogram (spec §7.3 nice-to-haves) are not implemented yet; the readers and the per-section alignment hooks exist.
+- Alignment is manual (numeric inputs and nudge buttons); there is no automatic registration.
+- Selection works on the visible points only (hidden sections, categories and clipped points are never selected) and is not stored in the share link.
 - CSR `X` needs one full pass over the index array before the first gene can be coloured. Below 25 M non-zeros SPV builds an in-memory column index (8 bytes per non-zero) so later genes are instant; above that each gene is scanned in chunks. Convert to CSC with `prepare_h5ad.py --csc` for large matrices.
 - The whole file is downloaded when the host does not support byte ranges or serves it gzip-encoded.
 - A single WebGL context: GPU memory for images is capped at 256 MB and images are downscaled to 2048 px (1024 px above 8 sections).
@@ -167,7 +169,8 @@ python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synt
 | `I` | Toggle tissue images |
 | `L` | Cycle layout mode |
 | `O` | Toggle orthographic camera |
-| `Esc` | Clear the pinned selection |
+| `X` | Lasso / box selection mode (Shift-drag for a box) |
+| `Esc` | Clear the pinned cell / the selection / leave selection mode |
 | `?` | Help |
 
 ## Privacy
@@ -210,6 +213,7 @@ Initial JS payload: 174 kB gzipped (Three.js included). The worker chunk with th
 - **Texture-driven rendering.** One `THREE.Points`. Per-point attributes are uploaded once per dataset (positions, section ordinal, validity) and once per colour variable (scalar or code). Everything interactive is a small texture or uniform: a 256-texel colormap, a palette whose alpha channel is the category mask, and a per-section transform table (offset, alpha, rotation/flip, pivot) that implements all four layouts, section visibility, dimming and manual alignment. Native z is kept through a `uNativeZ` uniform, so native-3D stacks and uniform stacks share one shader path.
 - **Display frame.** Flips and the Y/Z swap are applied in the shader before the section transform; the same `toDisplay` function produces the section geometry, image-plane placement and clip bounds on the CPU, so images always follow their spots.
 - **Picking.** Point ids are rendered as colours into a 1×1 target through `camera.setViewOffset` and read back asynchronously; no raycasting.
+- **Selection.** Lasso/box selection re-runs the vertex-shader transform on the CPU (display frame, section table, alignment, explode, camera) for the visible points and tests them against the screen-space polygon, so it agrees with what is drawn; exports fetch cell ids from the worker in one pass.
 - **State.** One typed slice store drives both the GPU side and the panels; the URL hash is a compact, versioned serialisation of everything except transient UI, written with `replaceState` after a debounce.
 - **Deviations from the original spec** (ESLint flat config, TypeScript 5.9 instead of 7, embedded WASM, fixture sizes) and everything the demo file changed about the design are recorded in `PLAN.md`.
 

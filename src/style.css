@@ -605,6 +605,20 @@ kbd {
 .spv-drop.spv-active {
   display: flex;
 }
+.spv-selection-bar {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--spv-panel) 90%, transparent);
+  border: 1px solid var(--spv-accent);
+  border-radius: var(--spv-radius);
+  font-size: 12px;
+  z-index: 3;
+}
 .spv-fatal {
   padding: 40px;
   max-width: 60ch;

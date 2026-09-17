@@ -33,6 +33,7 @@ import {
   type LayoutResult,
   type SectionGeom,
 } from './render/sections';
+import { Matrix4 } from 'three';
 import { Store } from './state/store';
 import { parseState, serializeState } from './state/urlState';
 import { defaultState, type ViewerState } from './state/viewerState';
@@ -67,6 +68,15 @@ export interface ColorbarModel {
   reversed: boolean;
   nanColor: string;
   quantiles: Float64Array | null;
+  /** two-gene blend: second variable */
+  blend: {
+    nameA: string;
+    colorA: string;
+    nameB: string;
+    colorB: string;
+    vminB: number;
+    vmaxB: number;
+  } | null;
 }
 
 export interface TooltipInfo {
@@ -99,7 +109,8 @@ export type AppEvent =
   | { type: 'hover'; info: TooltipInfo | null }
   | { type: 'pin'; info: TooltipInfo | null }
   | { type: 'notice'; message: string; kind: 'error' | 'warn' | 'info' }
-  | { type: 'counts' };
+  | { type: 'counts' }
+  | { type: 'selection' };
 
 export type AppStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -121,6 +132,29 @@ export function formatValue(v: number): string {
   if (!Number.isFinite(v)) return 'NA';
   if (Number.isInteger(v)) return v.toLocaleString('en-US');
   return Math.abs(v) >= 100 ? v.toFixed(1) : v.toPrecision(4);
+}
+
+/** 64-bin histogram of the finite values in [lo, hi]. */
+export function histogramOf(
+  values: ArrayLike<number>,
+  lo: number,
+  hi: number,
+  nBins: number,
+): { bins: Float64Array; lo: number; hi: number; max: number } {
+  const bins = new Float64Array(nBins);
+  if (!(hi > lo)) hi = lo + 1;
+  const scale = nBins / (hi - lo);
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (!Number.isFinite(v)) continue;
+    let b = Math.floor((v - lo) * scale);
+    if (b < 0) b = 0;
+    if (b >= nBins) b = nBins - 1;
+    bins[b]++;
+  }
+  let max = 0;
+  for (let i = 0; i < nBins; i++) if (bins[i] > max) max = bins[i];
+  return { bins, lo, hi, max };
 }
 
 export class App {
@@ -173,6 +207,12 @@ export class App {
   private scalarValues: Float32Array | null = null;
   private scalarQuantiles: Float64Array | null = null;
   private scalarLabel = '';
+  private scalarValues2: Float32Array | null = null;
+  private scalarQuantiles2: Float64Array | null = null;
+  histogram: { bins: Float64Array; lo: number; hi: number; max: number } | null = null;
+  selection: Uint8Array | null = null;
+  selectionCount = 0;
+  private selectModeOn = false;
   private frame: DisplayFrame = { flipX: false, flipY: false, flipZ: false, swapYZ: false };
   edges: EdgeCloud | null = null;
   graphStatus: { key: string; nEdges: number; nTotal: number; subsampled: boolean } | null = null;
@@ -205,7 +245,8 @@ export class App {
         v.source === prev.source &&
         v.key === prev.key &&
         v.matrix === prev.matrix &&
-        v.log1p === prev.log1p;
+        v.log1p === prev.log1p &&
+        v.gene2 === prev.gene2;
       const styleSame =
         v.colormap === prev.colormap &&
         v.reversed === prev.reversed &&
@@ -214,7 +255,8 @@ export class App {
         v.pHi === prev.pHi &&
         v.vmin === prev.vmin &&
         v.vmax === prev.vmax &&
-        v.nanColor === prev.nanColor;
+        v.nanColor === prev.nanColor &&
+        v.blendColors === prev.blendColors;
       if (sameData && styleSame && v.hiddenCategories !== prev.hiddenCategories)
         this.applyCategoryMask();
       else if (sameData && v.geneNameColumn === prev.geneNameColumn) this.applyColorStyle();
@@ -359,6 +401,12 @@ export class App {
     this.colorbar = null;
     this.scalarValues = null;
     this.scalarQuantiles = null;
+    this.scalarValues2 = null;
+    this.scalarQuantiles2 = null;
+    this.histogram = null;
+    this.selection = null;
+    this.selectionCount = 0;
+    this.emit({ type: 'selection' });
     this.geneCache.clear();
     this.columnCache.clear();
     this.indexCache.clear();
@@ -917,6 +965,8 @@ export class App {
         this.colorbar = null;
         this.scalarValues = null;
         this.scalarQuantiles = null;
+        this.scalarValues2 = null;
+        this.histogram = null;
       } else if (c.source === 'obs') {
         const col = await this.column(c.key);
         if (token !== this.colorToken) return;
@@ -946,6 +996,8 @@ export class App {
           this.colorbar = null;
           this.scalarValues = null;
           this.scalarQuantiles = null;
+          this.scalarValues2 = null;
+          this.histogram = null;
           this.currentCodes = col.codes;
           this.edges?.setCodes(col.codes);
           pc.setCodes(col.codes);
@@ -963,6 +1015,27 @@ export class App {
               : Float32Array.from(col.values as ArrayLike<number>);
           this.setScalar(values, col.quantiles, c.key);
         }
+      } else if (c.gene2) {
+        const [ga, gb] = await Promise.all([
+          this.gene(c.matrix, c.key, (p) => this.emit({ type: 'progress', progress: p })),
+          this.gene(c.matrix, c.gene2),
+        ]);
+        if (token !== this.colorToken) return;
+        this.emit({ type: 'progress', progress: null });
+        this.legend = null;
+        const tf = (v: Float32Array) =>
+          c.log1p ? Float32Array.from(v, (x) => Math.log1p(Math.max(0, x))) : v;
+        const tq = (q: Float64Array) =>
+          c.log1p ? Float64Array.from(q, (x) => Math.log1p(Math.max(0, x))) : q;
+        this.scalarValues = tf(ga.values);
+        this.scalarQuantiles = tq(ga.quantiles);
+        this.scalarValues2 = tf(gb.values);
+        this.scalarQuantiles2 = tq(gb.quantiles);
+        this.scalarLabel = `${c.key} + ${c.gene2}${c.log1p ? ' (log1p)' : ''}`;
+        this.histogram = null;
+        pc.setScalar(this.scalarValues);
+        pc.setScalar2(this.scalarValues2);
+        this.applyColorStyle();
       } else {
         const gv = await this.gene(c.matrix, c.key, (p) =>
           this.emit({ type: 'progress', progress: p }),
@@ -992,7 +1065,10 @@ export class App {
   private setScalar(values: Float32Array, quantiles: Float64Array, label: string): void {
     this.scalarValues = values;
     this.scalarQuantiles = quantiles;
+    this.scalarValues2 = null;
+    this.scalarQuantiles2 = null;
     this.scalarLabel = label;
+    this.histogram = histogramOf(values, quantiles[0], quantiles[1000], 64);
     this.pc?.setScalar(values);
     this.applyColorStyle();
   }
@@ -1026,9 +1102,26 @@ export class App {
       vmin = 0;
       vmax = 1;
     }
+    let blend: ColorbarModel['blend'] = null;
+    if (this.scalarValues2 && this.scalarQuantiles2 && c.gene2) {
+      const q2 = this.scalarQuantiles2;
+      const q2At = (p: number) => q2[Math.max(0, Math.min(1000, Math.round(p * 10)))];
+      const vmin2 = c.rangeMode === 'absolute' && c.vmin !== null ? c.vmin : q2At(c.pLo);
+      const vmax2 = c.rangeMode === 'absolute' && c.vmax !== null ? c.vmax : q2At(c.pHi);
+      pc.setRange2(vmin2, vmax2);
+      pc.setBlendColors(c.blendColors[0], c.blendColors[1]);
+      blend = {
+        nameA: c.key ?? '',
+        colorA: c.blendColors[0],
+        nameB: c.gene2,
+        colorB: c.blendColors[1],
+        vminB: vmin2,
+        vmaxB: vmax2 > vmin2 ? vmax2 : vmin2,
+      };
+    }
     pc.setColormap(c.colormap, c.reversed);
     pc.setRange(vmin, vmax);
-    pc.setColorMode('scalar');
+    pc.setColorMode(blend ? 'blend' : 'scalar');
     this.colorbar = {
       label: this.scalarLabel,
       vmin,
@@ -1037,6 +1130,7 @@ export class App {
       reversed: c.reversed,
       nanColor: c.nanColor,
       quantiles: q,
+      blend,
     };
     this.emit({ type: 'colorbar' });
     this.viewer.requestRender();
@@ -1435,6 +1529,213 @@ export class App {
     });
   }
 
+  blendWithGene(name: string | null): void {
+    this.store.update('color', { gene2: name });
+  }
+
+  // --- selection (lasso / box) -------------------------------------------------------------------------
+  get selectMode(): boolean {
+    return this.selectModeOn;
+  }
+
+  setSelectMode(on: boolean): void {
+    this.selectModeOn = on;
+    this.viewer.rig.controls.enabled = !on;
+    this.viewer.renderer.domElement.style.cursor = on ? 'crosshair' : '';
+    this.emit({ type: 'selection' });
+  }
+
+  /** Clip box in display coordinates (same as applyFilter, z ignored). */
+  private clipBox(): { min: number[]; max: number[] } {
+    const sp = this.spatial!;
+    const f = this.store.slice('filter');
+    const lo = toDisplay(sp.rawMin, sp.center, sp.scale, this.frame);
+    const hi = toDisplay(sp.rawMax, sp.center, sp.scale, this.frame);
+    const min = [Math.min(lo[0], hi[0]), Math.min(lo[1], hi[1])];
+    const max = [Math.max(lo[0], hi[0]), Math.max(lo[1], hi[1])];
+    const cx = [min[0] + f.clipX[0] * (max[0] - min[0]), min[0] + f.clipX[1] * (max[0] - min[0])];
+    const cy = [min[1] + f.clipY[0] * (max[1] - min[1]), min[1] + f.clipY[1] * (max[1] - min[1])];
+    return {
+      min: [f.clipX[0] > 0 ? cx[0] : -Infinity, f.clipY[0] > 0 ? cy[0] : -Infinity],
+      max: [f.clipX[1] < 1 ? cx[1] : Infinity, f.clipY[1] < 1 ? cy[1] : Infinity],
+    };
+  }
+
+  /**
+   * Screen-space (CSS px) positions of every currently visible point, computed with the same
+   * math as the vertex shader; hidden points get NaN.
+   */
+  projectPoints(): Float32Array {
+    const sp = this.spatial;
+    const res = this.layoutResult;
+    const params = this.layoutParams;
+    const pc = this.pc;
+    const n = sp?.n ?? 0;
+    const out = new Float32Array(n * 2).fill(NaN);
+    if (!sp || !res || !params || !pc) return out;
+    const mask = pc.getUserMask();
+    const hiddenCats =
+      this.legend && this.store.slice('color').source === 'obs' ? this.legend.hidden : null;
+    const codes = hiddenCats && hiddenCats.size ? this.currentCodes : null;
+    const clip = this.clipBox();
+    const zc = (res.bounds.min[2] + res.bounds.max[2]) / 2;
+    const cam = this.viewer.rig.camera;
+    cam.updateMatrixWorld();
+    const e = new Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).elements;
+    const { width, height } = this.viewer.getSize();
+    const fx = this.frame.flipX ? -1 : 1;
+    const fy = this.frame.flipY ? -1 : 1;
+    const fz = this.frame.flipZ ? -1 : 1;
+    const xyz = sp.xyz;
+    for (let i = 0; i < n; i++) {
+      if (!sp.valid[i] || (mask && !mask[i])) continue;
+      if (codes && hiddenCats!.has(codes[i])) continue;
+      let x = xyz[i * 3] * fx;
+      let y = xyz[i * 3 + 1] * fy;
+      let z = xyz[i * 3 + 2] * fz;
+      if (this.frame.swapYZ) [y, z] = [z, y];
+      if (x < clip.min[0] || x > clip.max[0] || y < clip.min[1] || y > clip.max[1]) continue;
+      const sec = sp.sectionOf ? sp.sectionOf[i] : 0xffff;
+      if (sec !== 0xffff && res.offsets[sec]) {
+        const o = res.offsets[sec];
+        if (o.alpha <= 0) continue;
+        const g = this.geoms[sec];
+        const a = params.alignment.get(sec);
+        let rx = (x - g.center[0]) * (a?.flipX ? -1 : 1);
+        let ry = (y - g.center[1]) * (a?.flipY ? -1 : 1);
+        if (a && a.rotation) {
+          const cs = Math.cos(a.rotation);
+          const sn = Math.sin(a.rotation);
+          [rx, ry] = [rx * cs - ry * sn, rx * sn + ry * cs];
+        }
+        x = rx + g.center[0] + o.dx;
+        y = ry + g.center[1] + o.dy;
+        z = z * res.nativeZ * params.zScale + o.dz;
+      } else {
+        z = z * params.zScale;
+      }
+      z = zc + (z - zc) * params.explode;
+      const cw = e[3] * x + e[7] * y + e[11] * z + e[15];
+      if (cw <= 0) continue;
+      const ndcX = (e[0] * x + e[4] * y + e[8] * z + e[12]) / cw;
+      const ndcY = (e[1] * x + e[5] * y + e[9] * z + e[13]) / cw;
+      out[i * 2] = ((ndcX + 1) / 2) * width;
+      out[i * 2 + 1] = ((1 - ndcY) / 2) * height;
+    }
+    return out;
+  }
+
+  /** Select the visible points inside a screen-space polygon (CSS px). Returns the count. */
+  selectByPolygon(poly: [number, number][]): number {
+    if (!this.pc || !this.spatial) return 0;
+    const pts = this.projectPoints();
+    const n = this.spatial.n;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const [x, y] of poly) {
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+    const sel = new Uint8Array(n);
+    let count = 0;
+    const m = poly.length;
+    for (let i = 0; i < n; i++) {
+      const x = pts[i * 2];
+      const y = pts[i * 2 + 1];
+      if (!(x >= minX && x <= maxX && y >= minY && y <= maxY)) continue;
+      let inside = false;
+      for (let a = 0, b = m - 1; a < m; b = a++) {
+        const [xa, ya] = poly[a];
+        const [xb, yb] = poly[b];
+        if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) inside = !inside;
+      }
+      if (inside) {
+        sel[i] = 1;
+        count++;
+      }
+    }
+    this.selection = count ? sel : null;
+    this.selectionCount = count;
+    this.pc.setSelection(this.selection);
+    this.viewer.requestRender();
+    this.emit({ type: 'selection' });
+    return count;
+  }
+
+  clearSelection(): void {
+    if (!this.selection && !this.selectionCount) return;
+    this.selection = null;
+    this.selectionCount = 0;
+    this.pc?.setSelection(null);
+    this.viewer.requestRender();
+    this.emit({ type: 'selection' });
+  }
+
+  /** Download the selected cells as CSV/TSV: index, row, section, tooltip fields and colour values. */
+  async exportSelection(format: 'csv' | 'tsv'): Promise<void> {
+    if (!this.selection || !this.client || !this.spatial) return;
+    const rows: number[] = [];
+    for (let i = 0; i < this.selection.length; i++) if (this.selection[i]) rows.push(i);
+    const names = await this.client.call('getObsIndex', rows);
+    const fields = this.store.slice('ui').tooltipFields;
+    const cols: ColumnData[] = [];
+    for (const f of fields) {
+      try {
+        cols.push(await this.column(f));
+      } catch {
+        /* skip unsupported columns */
+      }
+    }
+    const c = this.store.slice('color');
+    const geneCols =
+      c.source === 'gene' && c.key && this.scalarValues
+        ? [c.key, ...(c.gene2 && this.scalarValues2 ? [c.gene2] : [])]
+        : [];
+    const sep = format === 'csv' ? ',' : '\t';
+    const quote = (v: string) =>
+      format === 'csv' && /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const lines = [
+      ['cell_index', 'row', 'section', ...cols.map((col) => col.name), ...geneCols].join(sep),
+    ];
+    const sp = this.spatial;
+    for (let k = 0; k < rows.length; k++) {
+      const i = rows[k];
+      const sec =
+        sp.sectionOf && sp.sectionOf[i] !== 0xffff
+          ? (sp.sections[sp.sectionOf[i]]?.name ?? '')
+          : '';
+      const vals = [quote(names[k] ?? String(i)), String(i), quote(sec)];
+      for (const col of cols) {
+        vals.push(
+          col.kind === 'categorical'
+            ? quote(col.codes[i] >= 0 ? col.categories[col.codes[i]] : 'NA')
+            : String(col.values[i]),
+        );
+      }
+      if (geneCols.length && this.scalarValues) {
+        vals.push(String(this.scalarValues[i]));
+        if (geneCols.length > 1 && this.scalarValues2) vals.push(String(this.scalarValues2[i]));
+      }
+      lines.push(vals.join(sep));
+    }
+    const blob = new Blob([lines.join('\n') + '\n'], {
+      type: format === 'csv' ? 'text/csv' : 'text/tab-separated-values',
+    });
+    const d = this.store.slice('dataset');
+    const name = (d.id ?? d.name ?? 'dataset')
+      .replace(/\.h5ad$/i, '')
+      .replace(/[^A-Za-z0-9_-]+/g, '-');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `spv-${name}-selection.${format}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+
   // --- picking / tooltip ------------------------------------------------------------------------------
   async hover(x: number, y: number, clientX: number, clientY: number): Promise<void> {
     if (!this.pc || this.status !== 'ready') return;
@@ -1506,7 +1807,9 @@ export class App {
           colorValue = k >= 0 ? col.categories[k] : 'NA';
         }
       } else if (this.scalarValues) {
-        colorValue = formatValue(this.scalarValues[id]);
+        colorValue = this.scalarValues2
+          ? `${formatValue(this.scalarValues[id])} / ${formatValue(this.scalarValues2[id])}`
+          : formatValue(this.scalarValues[id]);
       }
     }
     const fields: [string, string][] = [];

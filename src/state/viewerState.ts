@@ -76,6 +76,9 @@ export interface ColorState {
   nanColor: string;
   hiddenCategories: number[];
   geneNameColumn: string | null;
+  /** second gene for two-gene blending (source must be 'gene') */
+  gene2: string | null;
+  blendColors: [string, string];
 }
 
 export interface FilterState {
@@ -176,6 +179,8 @@ export function defaultState(): ViewerState {
       nanColor: '#5b6470',
       hiddenCategories: [],
       geneNameColumn: null,
+      gene2: null,
+      blendColors: ['#ff00ff', '#00ff00'],
     },
     filter: { zRange: null, clipX: [0, 1], clipY: [0, 1], inTissueOnly: true, subsample: null },
     appearance: {

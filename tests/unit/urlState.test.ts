@@ -72,6 +72,8 @@ describe('url state', () => {
       nanColor: '#123456',
       hiddenCategories: [0, 4, 5, 6],
       geneNameColumn: 'gene_symbols',
+      gene2: 'Pbx3',
+      blendColors: ['#ff8800', '#0088ff'],
     };
     s.filter = {
       zRange: [320, 498],

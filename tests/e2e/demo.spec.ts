@@ -314,6 +314,99 @@ test.describe('nice-to-haves', () => {
   });
 });
 
+test.describe('nice-to-haves 5-7', () => {
+  test('two-gene blend colours by both genes and round-trips through the URL', async ({ page }) => {
+    const [a, b] = meta.suggested.gene_examples.map((g: { name: string }) => g.name);
+    await page.goto(`#dataset=demo&c=${encodeURIComponent(`gene:${a}`)}`);
+    await waitReady(page);
+    await page.waitForFunction((g) => window.__spv.info().colorbar?.label === g, a, {
+      timeout: 60_000,
+    });
+    await page.getByRole('tab', { name: 'Color' }).click();
+    await page.fill('input[placeholder^="Blend with"]', b);
+    await page.waitForSelector('.spv-panel.spv-active .spv-autocomplete-item');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction((l) => window.__spv.info().colorbar?.label === l, `${a} + ${b}`, {
+      timeout: 60_000,
+    });
+    expect((await info(page)).color.gene2).toBe(b);
+    await page.waitForFunction((g) => location.hash.includes(`c2=${g}`), b);
+    await expect(page.locator('.spv-colorbar-float')).toContainText(b);
+    await shot(page, 'blend');
+    await page.locator('.spv-panel.spv-active').getByRole('button', { name: 'Clear' }).click();
+    await page.waitForFunction((g) => window.__spv.info().colorbar?.label === g, a);
+  });
+
+  test('histogram handles set an explicit range', async ({ page }) => {
+    const gene = meta.suggested.gene_examples[0].name;
+    await page.goto(`#dataset=demo&c=${encodeURIComponent(`gene:${gene}`)}`);
+    await waitReady(page);
+    await page.waitForFunction((g) => window.__spv.info().colorbar?.label === g, gene, {
+      timeout: 60_000,
+    });
+    await page.getByRole('tab', { name: 'Color' }).click();
+    const h = (await info(page)).histogram;
+    expect(h.bins.length).toBe(64);
+    expect(h.bins.reduce((x: number, y: number) => x + y, 0)).toBe(meta.n_obs);
+    const canvas = page.locator('canvas[style*="ew-resize"]');
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.move(box.x + box.width - 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
+    await page.mouse.up();
+    await page.waitForFunction(() => window.__spv.info().color.rangeMode === 'absolute');
+    const c = (await info(page)).color;
+    expect(c.vmax).toBeGreaterThan(c.vmin);
+    expect(c.vmax).toBeLessThan(meta.suggested.gene_examples[0].max);
+  });
+
+  test('lasso and box selection dim the rest and export CSV with the section column', async ({
+    page,
+  }) => {
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    await page.keyboard.press('x');
+    await page.waitForFunction(() => window.__spv.app.selectMode === true);
+    await expect(page.locator('.spv-selection-bar')).toContainText('Select mode');
+    const canvas = page.locator('.spv-viewport canvas').first();
+    const box = (await canvas.boundingBox())!;
+    const cx = box.x + box.width * 0.55;
+    const cy = box.y + box.height * 0.5;
+    await page.mouse.move(cx + 100, cy);
+    await page.mouse.down();
+    for (let a = 0; a <= 360; a += 30)
+      await page.mouse.move(
+        cx + 100 * Math.cos((a * Math.PI) / 180),
+        cy + 100 * Math.sin((a * Math.PI) / 180),
+      );
+    await page.mouse.up();
+    await page.waitForFunction(() => window.__spv.info().selection > 0);
+    const lasso = (await info(page)).selection;
+    expect(lasso).toBeGreaterThan(100);
+    await shot(page, 'lasso');
+    // box selection replaces the lasso
+    await page.keyboard.down('Shift');
+    await page.mouse.move(cx - 60, cy - 40);
+    await page.mouse.down();
+    await page.mouse.move(cx + 60, cy + 40, { steps: 3 });
+    await page.mouse.up();
+    await page.keyboard.up('Shift');
+    await page.waitForFunction((n) => window.__spv.info().selection !== n, lasso);
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('.spv-selection-bar').getByRole('button', { name: 'CSV' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('spv-demo-selection.csv');
+    const text = fs.readFileSync((await download.path())!, 'utf8');
+    const lines = text.trim().split('\n');
+    expect(lines[0].split(',').slice(0, 3)).toEqual(['cell_index', 'row', 'section']);
+    expect(lines.length - 1).toBe((await info(page)).selection);
+    expect(lines[1].split(',')[2]).toMatch(/^slice\d+$/);
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.__spv.info().selection === 0);
+  });
+});
+
 const synthetic = path.join(ROOT, 'data/synthetic/synthetic_40k.h5ad');
 test.describe('native 3-D synthetic dataset', () => {
   test.skip(!fs.existsSync(synthetic), 'run scripts/make_synthetic_demo.py to enable');
