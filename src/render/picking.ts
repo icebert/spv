@@ -49,7 +49,6 @@ export class GpuPicker {
       setViewOffset(fw: number, fh: number, x: number, y: number, w: number, h: number): void;
       clearViewOffset(): void;
     };
-    const prevMaterial = points.object.material;
     const prevTarget = r.getRenderTarget();
     const prevAlpha = r.getClearAlpha();
     r.getClearColor(this.clearColor);
@@ -62,7 +61,7 @@ export class GpuPicker {
         1,
         1,
       );
-      points.object.material = points.pickMaterial;
+      points.setPicking(true);
       r.setRenderTarget(this.target);
       r.setClearColor(0x000000, 0);
       r.clear();
@@ -70,12 +69,12 @@ export class GpuPicker {
       // readRenderTargetPixelsAsync issues the GPU read immediately and only awaits the fence,
       // so all render state can be restored before waiting; a frame drawn meanwhile is unaffected.
       const pending = r.readRenderTargetPixelsAsync(this.target, 0, 0, 1, 1, this.pixel);
-      this.restore(points, cam, prevMaterial, prevTarget, prevAlpha);
+      this.restore(points, cam, prevTarget, prevAlpha);
       const buf = await pending;
       const id = buf[0] | (buf[1] << 8) | (buf[2] << 16);
       return id - 1;
     } catch {
-      this.restore(points, cam, prevMaterial, prevTarget, prevAlpha);
+      this.restore(points, cam, prevTarget, prevAlpha);
       return -1;
     } finally {
       this.busy = false;
@@ -87,14 +86,13 @@ export class GpuPicker {
   private restore(
     points: PointCloud,
     cam: { clearViewOffset(): void },
-    prevMaterial: PointCloud['object']['material'],
     prevTarget: ReturnType<WebGLRenderer['getRenderTarget']>,
     prevAlpha: number,
   ): void {
     if (this.restored) return;
     this.restored = true;
     cam.clearViewOffset();
-    points.object.material = prevMaterial;
+    points.setPicking(false);
     this.renderer.setRenderTarget(prevTarget);
     this.renderer.setClearColor(this.clearColor, prevAlpha);
   }
@@ -126,12 +124,11 @@ export class GpuPicker {
             stencilBuffer: false,
           })
         : null;
-    const prevMaterial = points.object.material;
     const prevTarget = r.getRenderTarget();
     const prevAlpha = r.getClearAlpha();
     r.getClearColor(this.clearColor);
     try {
-      points.object.material = points.pickMaterial;
+      points.setPicking(true);
       r.setRenderTarget(target);
       r.setClearColor(0x000000, 0);
       r.clear();
@@ -149,7 +146,7 @@ export class GpuPicker {
         ids[i] = (buf[p] | (buf[p + 1] << 8) | (buf[p + 2] << 16)) - 1;
       return { width: w, height: h, ids };
     } finally {
-      points.object.material = prevMaterial;
+      points.setPicking(false);
       r.setRenderTarget(prevTarget);
       r.setClearColor(this.clearColor, prevAlpha);
       target?.dispose();

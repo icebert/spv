@@ -1,6 +1,12 @@
 /**
- * The point cloud: one `THREE.Points` with per-point attributes uploaded once per dataset (and once
- * per colour variable), plus small textures/uniforms for everything that changes interactively.
+ * The point cloud: per-point attributes uploaded once per dataset (and once per colour variable),
+ * plus small textures/uniforms for everything that changes interactively.
+ *
+ * The cloud is drawn in batches of at most `BATCH_SIZE` points, each `THREE.Points` with its own
+ * vertex buffers, all under 1 MiB. Safari (WebGL on Metal, seen on an AMD iMac) fetched a position
+ * buffer wrongly past its first 1 MiB: every point from row 87,381 (= 1 MiB / 12 bytes) on was
+ * drawn with another row's coordinates, so a slice appeared twice. Batches sidestep that at the
+ * cost of one draw call per 65,536 points. Ids stay global: the shader adds `uIdOffset`.
  */
 import {
   BufferAttribute,
@@ -8,6 +14,7 @@ import {
   Color,
   DataTexture,
   GLSL3,
+  Group,
   LinearFilter,
   NearestFilter,
   NoBlending,
@@ -35,7 +42,39 @@ export interface PointCloudSource {
   valid: Uint8Array;
 }
 
+/** Points per draw call; keeps every vertex buffer (12 bytes per point at most) under 1 MiB. */
+export const BATCH_SIZE = 65536;
+
 const NO_SECTION = 0xffff;
+
+interface MasterArrays {
+  position: Float32Array;
+  aSection: Uint16Array;
+  aScalar: Float32Array;
+  aCode: Float32Array;
+  aVisible: Uint8Array;
+  aScalar2: Float32Array;
+  aSelected: Uint8Array;
+}
+type AttributeName = keyof MasterArrays;
+const ITEM_SIZE: Record<AttributeName, number> = {
+  position: 3,
+  aSection: 1,
+  aScalar: 1,
+  aCode: 1,
+  aVisible: 1,
+  aScalar2: 1,
+  aSelected: 1,
+};
+
+interface Batch {
+  start: number;
+  count: number;
+  geometry: BufferGeometry;
+  points: Points;
+  material: ShaderMaterial;
+  pickMaterial: ShaderMaterial;
+}
 
 function makeColormapTexture(lut: Uint8Array): DataTexture {
   const tex = new DataTexture(new Uint8Array(lut), 256, 1, RGBAFormat, UnsignedByteType);
@@ -47,35 +86,34 @@ function makeColormapTexture(lut: Uint8Array): DataTexture {
 }
 
 export class PointCloud {
-  readonly object: Points;
-  readonly geometry: BufferGeometry;
-  readonly material: ShaderMaterial;
-  readonly pickMaterial: ShaderMaterial;
+  /** All batches; add this to the scene. */
+  readonly object = new Group();
   readonly uniforms: Record<string, IUniform>;
   readonly n: number;
+  private readonly batches: Batch[] = [];
+  /** Whole-dataset arrays; each batch's attributes are `subarray` views into these. */
+  private readonly arrays: MasterArrays;
   private readonly valid: Uint8Array;
   private userMask: Uint8Array | null = null;
   private readonly colormapTex: DataTexture;
   private paletteTex: DataTexture;
   private paletteData: Uint8Array;
   private paletteN = 0;
+  private picking = false;
   private disposed = false;
 
   constructor(src: PointCloudSource, sectionTable: SectionTable) {
     this.n = src.n;
     this.valid = src.valid;
-    const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(src.xyz, 3));
-    const sec = src.sectionOf ?? new Uint16Array(src.n).fill(NO_SECTION);
-    g.setAttribute('aSection', new BufferAttribute(sec, 1));
-    g.setAttribute('aScalar', new BufferAttribute(new Float32Array(src.n).fill(NaN), 1));
-    g.setAttribute('aCode', new BufferAttribute(new Float32Array(src.n).fill(-1), 1));
-    g.setAttribute('aVisible', new BufferAttribute(new Uint8Array(src.valid), 1));
-    g.setAttribute('aScalar2', new BufferAttribute(new Float32Array(src.n).fill(NaN), 1));
-    g.setAttribute('aSelected', new BufferAttribute(new Uint8Array(src.n), 1));
-    // Positions live in a unit cube; a fixed bounding sphere avoids NaN-sensitive recomputation.
-    g.boundingSphere = new Sphere(new Vector3(), 4);
-    this.geometry = g;
+    this.arrays = {
+      position: src.xyz,
+      aSection: src.sectionOf ?? new Uint16Array(src.n).fill(NO_SECTION),
+      aScalar: new Float32Array(src.n).fill(NaN),
+      aCode: new Float32Array(src.n).fill(-1),
+      aVisible: new Uint8Array(src.valid),
+      aScalar2: new Float32Array(src.n).fill(NaN),
+      aSelected: new Uint8Array(src.n),
+    };
 
     this.colormapTex = makeColormapTexture(colormapLUT('viridis'));
     this.paletteData = new Uint8Array(4).fill(255);
@@ -124,66 +162,92 @@ export class PointCloud {
       vertexShader: POINTS_VERTEX,
       fragmentShader: POINTS_FRAGMENT,
     };
-    this.material = new ShaderMaterial({
-      ...common,
-      uniforms: this.uniforms,
-      transparent: true,
-      depthTest: true,
-      depthWrite: true,
-    });
-    this.pickMaterial = new ShaderMaterial({
-      ...common,
-      uniforms: { ...this.uniforms, uPicking: { value: 1 } },
-      transparent: false,
-      blending: NoBlending,
-      depthTest: true,
-      depthWrite: true,
-    });
-    this.object = new Points(g, this.material);
-    this.object.frustumCulled = false;
-    this.object.renderOrder = 10;
     this.object.name = 'spv-points';
+    for (let start = 0; start < src.n; start += BATCH_SIZE) {
+      const count = Math.min(BATCH_SIZE, src.n - start);
+      const geometry = new BufferGeometry();
+      for (const name of Object.keys(this.arrays) as AttributeName[]) {
+        const k = ITEM_SIZE[name];
+        geometry.setAttribute(
+          name,
+          new BufferAttribute(this.arrays[name].subarray(start * k, (start + count) * k), k),
+        );
+      }
+      // Positions live in a unit cube; a fixed bounding sphere avoids NaN-sensitive recomputation.
+      geometry.boundingSphere = new Sphere(new Vector3(), 4);
+      // Uniform objects are shared with every other batch except the two that differ per batch.
+      const material = new ShaderMaterial({
+        ...common,
+        uniforms: { ...this.uniforms, uIdOffset: { value: start } },
+        transparent: true,
+        depthTest: true,
+        depthWrite: true,
+      });
+      const pickMaterial = new ShaderMaterial({
+        ...common,
+        uniforms: { ...this.uniforms, uIdOffset: { value: start }, uPicking: { value: 1 } },
+        transparent: false,
+        blending: NoBlending,
+        depthTest: true,
+        depthWrite: true,
+      });
+      const points = new Points(geometry, material);
+      points.frustumCulled = false;
+      points.renderOrder = 10;
+      points.name = `spv-points-${start}`;
+      this.object.add(points);
+      this.batches.push({ start, count, geometry, points, material, pickMaterial });
+    }
   }
 
-  private attr(name: string): BufferAttribute {
-    return this.geometry.getAttribute(name) as BufferAttribute;
+  get batchCount(): number {
+    return this.batches.length;
+  }
+
+  /** Swap every batch to the id-encoding material (GPU picking, pixel census) or back. */
+  setPicking(on: boolean): void {
+    if (this.picking === on) return;
+    this.picking = on;
+    for (const b of this.batches) b.points.material = on ? b.pickMaterial : b.material;
+  }
+
+  private touch(name: AttributeName): void {
+    for (const b of this.batches)
+      (b.geometry.getAttribute(name) as BufferAttribute).needsUpdate = true;
   }
 
   /** Diagnostic: mark every vertex attribute for re-upload from its CPU array. */
   reupload(): void {
-    for (const name of Object.keys(this.geometry.attributes)) this.attr(name).needsUpdate = true;
+    for (const name of Object.keys(this.arrays) as AttributeName[]) this.touch(name);
   }
 
   /** Continuous values (NaN allowed) driving the colormap. `null` clears. */
   setScalar(values: ArrayLike<number> | null): void {
-    const a = this.attr('aScalar');
-    const arr = a.array as Float32Array;
-    if (values) arr.set(values as ArrayLike<number>);
+    const arr = this.arrays.aScalar;
+    if (values) arr.set(values);
     else arr.fill(NaN);
-    a.needsUpdate = true;
+    this.touch('aScalar');
   }
 
   /** Category codes (-1 = missing). Float32 storage handles > 65535 categories. */
   setCodes(codes: ArrayLike<number> | null): void {
-    const a = this.attr('aCode');
-    const arr = a.array as Float32Array;
+    const arr = this.arrays.aCode;
     if (codes) for (let i = 0; i < arr.length; i++) arr[i] = codes[i];
     else arr.fill(-1);
-    a.needsUpdate = true;
+    this.touch('aCode');
   }
 
   /** User filter mask (subsampling, in_tissue…); combined with coordinate validity. */
   setUserMask(mask: Uint8Array | null): void {
     this.userMask = mask;
-    const a = this.attr('aVisible');
-    const arr = a.array as Uint8Array;
+    const arr = this.arrays.aVisible;
     for (let i = 0; i < arr.length; i++) arr[i] = this.valid[i] && (!mask || mask[i]) ? 1 : 0;
-    a.needsUpdate = true;
+    this.touch('aVisible');
   }
 
   get visibleCount(): number {
     let c = 0;
-    const arr = this.attr('aVisible').array as Uint8Array;
+    const arr = this.arrays.aVisible;
     for (let i = 0; i < arr.length; i++) c += arr[i];
     return c;
   }
@@ -199,11 +263,10 @@ export class PointCloud {
 
   /** Second continuous variable for two-gene blending. */
   setScalar2(values: ArrayLike<number> | null): void {
-    const a = this.attr('aScalar2');
-    const arr = a.array as Float32Array;
-    if (values) arr.set(values as ArrayLike<number>);
+    const arr = this.arrays.aScalar2;
+    if (values) arr.set(values);
     else arr.fill(NaN);
-    a.needsUpdate = true;
+    this.touch('aScalar2');
   }
 
   setRange2(min: number, max: number): void {
@@ -218,11 +281,10 @@ export class PointCloud {
 
   /** Selection mask (1 = selected); null clears and turns dimming off. */
   setSelection(mask: Uint8Array | null): void {
-    const a = this.attr('aSelected');
-    const arr = a.array as Uint8Array;
+    const arr = this.arrays.aSelected;
     if (mask) arr.set(mask);
     else arr.fill(0);
-    a.needsUpdate = true;
+    this.touch('aSelected');
     this.uniforms.uSelectionActive.value = mask ? 1 : 0;
   }
 
@@ -290,7 +352,7 @@ export class PointCloud {
 
   setOpacity(alpha: number): void {
     this.uniforms.uOpacity.value = alpha;
-    this.material.depthWrite = alpha >= 0.99;
+    for (const b of this.batches) b.material.depthWrite = alpha >= 0.99;
   }
 
   setShape(shape: SpriteShape): void {
@@ -356,9 +418,11 @@ export class PointCloud {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.geometry.dispose();
-    this.material.dispose();
-    this.pickMaterial.dispose();
+    for (const b of this.batches) {
+      b.geometry.dispose();
+      b.material.dispose();
+      b.pickMaterial.dispose();
+    }
     this.colormapTex.dispose();
     this.paletteTex.dispose();
   }

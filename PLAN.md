@@ -199,3 +199,13 @@ visible single-z section at that z). The "Shown at z" / `section_alignment` mech
 for genuinely misregistered data but is not needed for the demo. Also fixed on the way: the E2E suite
 now builds to `dist-e2e/` on port 4174 instead of reusing a developer's preview server on 4173, which
 had made the suite test a stale bundle.
+
+**Second cause, same row boundary (2026-09-18).** With the loader fixed, Safari 26.5 on the AMD iMac
+still showed two slabs while the CPU arrays were verified intact and the export proved the duplicate
+was inside the drawing buffer. The per-cell diagnostic (GPU pixel centroid vs CPU projection, before
+and after re-uploading every attribute) showed exactly ids 87,381–90,010 displaced by ~450 px and
+unchanged by the re-upload: 87,381 × 12 bytes = 1 MiB into the *position* buffer. Row 87,381 is also
+where the file's float64 coordinate array crosses 2 MiB, which is why the loader hypothesis fit so
+well. Playwright's WebKit on the same GPU does not reproduce it. Fix: `PointCloud` draws in batches
+of 65,536 points with separate sub-1 MiB buffers (`uIdOffset` keeps ids global); the GPU picker and
+the census swap materials per batch. Chromium and WebKit report 0 displaced cells; Safari pending.

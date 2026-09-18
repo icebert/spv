@@ -168,7 +168,8 @@ test.describe('demo dataset', () => {
     expect(report).not.toContain('corrupt');
     expect(report).toContain('loaded lazy');
     // one Points draw + the axes gizmo; every vertex submitted exactly once
-    expect(report).toMatch(/Frame: 2 draw calls, 103,085 point vertices/);
+    const batches = Math.ceil(meta.n_obs / 65536); // sub-1 MiB vertex buffers (Safari workaround)
+    expect(report).toMatch(new RegExp(`Frame: ${batches + 1} draw calls, 103,085 point vertices`));
     // what the canvas shows sits where the CPU projects the visible cells (point radius margin)
     const box = (re: RegExp) => {
       const m = re.exec(report);

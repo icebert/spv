@@ -39,6 +39,7 @@ uniform int uColorMode;      // 0 scalar, 1 category, 2 uniform, 3 two-gene blen
 uniform sampler2D uPalette;
 uniform vec2 uPaletteDims;
 uniform float uSelectionActive;
+uniform int uIdOffset;      // first global point id of this batch
 
 out float vScalar;
 out float vScalar2;
@@ -57,7 +58,7 @@ float paletteAlpha(float code) {
 }
 
 void main() {
-  vId = gl_VertexID;
+  vId = gl_VertexID + uIdOffset;
   vScalar = aScalar;
   vScalar2 = aScalar2;
   vCode = aCode;
@@ -100,7 +101,7 @@ void main() {
   } else {
     size = uPointSize;
   }
-  float id = float(gl_VertexID);
+  float id = float(vId);
   vHighlight = (abs(id - uHighlightId) < 0.5) ? 1.0 : ((abs(id - uHoverId) < 0.5) ? 0.5 : 0.0);
   if (vHighlight > 0.9) size = max(size * 1.8, size + 6.0);
   else if (vHighlight > 0.4) size = max(size * 1.4, size + 3.0);
