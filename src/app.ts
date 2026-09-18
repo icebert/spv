@@ -4,6 +4,8 @@
  * sections, pick, screenshot, share). Panels only talk to the store and to this class.
  */
 import { versionLine } from './version';
+import { csvCell } from './util/csv';
+import { unsafeUrlReason } from './util/safeUrl';
 import { recentErrors, recordError } from './util/errorLog';
 import type { ColormapName } from './color/colormaps';
 import { paletteFor } from './color/palettes';
@@ -331,7 +333,7 @@ export class App {
 
   /** Manifest URLs are relative to the site base; absolute URLs and root-absolute paths are kept. */
   resolveUrl(url: string): string {
-    if (/^(https?:)?\/\//.test(url) || url.startsWith('blob:') || url.startsWith('/')) return url;
+    if (/^(https?:)?\/\//.test(url) || url.startsWith('/')) return url;
     return `${this.base}${url}`;
   }
 
@@ -346,6 +348,14 @@ export class App {
   }
 
   async openUrl(url: string): Promise<void> {
+    // Checked on the raw input, before resolveUrl() could turn "javascript:…" into a site path.
+    const reason = unsafeUrlReason(url);
+    if (reason) {
+      this.errorMessage = reason;
+      this.setStatus('error', reason);
+      this.notice(reason, 'error');
+      return;
+    }
     const entry = this.manifest.find((d) => this.resolveUrl(d.url) === url || d.url === url);
     this.store.update('dataset', {
       id: entry?.id ?? null,
@@ -441,6 +451,11 @@ export class App {
       this.emit({ type: 'progress', progress: p });
     };
     try {
+      if (source.kind === 'url') {
+        // #url= comes from whoever sent the link: only http(s) targets are fetched.
+        const reason = unsafeUrlReason(source.url);
+        if (reason) throw Object.assign(new Error(reason), { code: 'url' });
+      }
       if (this.client?.dead) {
         // The worker crashed (uncaught error or WASM abort); only a fresh one can read again.
         this.client.terminate();
@@ -1738,8 +1753,7 @@ export class App {
         ? [c.key, ...(c.gene2 && this.scalarValues2 ? [c.gene2] : [])]
         : [];
     const sep = format === 'csv' ? ',' : '\t';
-    const quote = (v: string) =>
-      format === 'csv' && /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const quote = (v: string) => csvCell(v, sep);
     const lines = [
       ['cell_index', 'row', 'section', ...cols.map((col) => col.name), ...geneCols].join(sep),
     ];

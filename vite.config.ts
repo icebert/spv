@@ -134,14 +134,14 @@ function serveDataDir(): Plugin {
 /**
  * The Content Security Policy is a <meta> tag in index.html because GitHub Pages cannot send
  * headers. The dev server injects CSS and its error overlay as inline <style> elements, so in
- * `serve` mode that one directive is loosened; builds and `vite preview` keep the strict policy.
+ * `serve` mode styles may be inline; builds and `vite preview` keep the strict policy.
  */
 function devCsp(): Plugin {
   return {
     name: 'spv-dev-csp',
     apply: 'serve',
     transformIndexHtml(html) {
-      return html.replace("style-src-elem 'self';", "style-src-elem 'self' 'unsafe-inline';");
+      return html.replace("style-src 'self';", "style-src 'self' 'unsafe-inline';");
     },
   };
 }

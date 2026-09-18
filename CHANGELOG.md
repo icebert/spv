@@ -5,6 +5,13 @@ and the `D` diagnostic report show it together with the build stamp (short commi
 
 ## Unreleased
 
+- Security: `#url=` and the URL box accept http(s) targets only; CSV/TSV exports neutralise
+  formula-leading cells; images above 512 M samples are refused before allocation; element
+  styles go through the CSSOM so the Content Security Policy allows no inline styles at all;
+  install scripts are disabled for dependencies; `npm audit signatures` runs in CI; GitHub
+  Actions are pinned to commit hashes with non-persisted, read-only credentials. `SECURITY.md`
+  added.
+
 ## 0.1.0 (2026-09-17)
 
 First complete build.

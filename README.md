@@ -87,7 +87,7 @@ diagnose drawing problems: [docs/internals.md](docs/internals.md). Decisions and
 
 Everything runs in your browser. Local files are read in place and never uploaded; remote files
 are fetched by your browser directly from the host you name. The page loads nothing from third
-parties.
+parties. [SECURITY.md](SECURITY.md) describes the threat model and how to report a problem.
 
 ## License
 

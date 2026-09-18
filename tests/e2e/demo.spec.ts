@@ -550,7 +550,31 @@ test.describe('production hardening', () => {
     await waitReady(page);
     await page.evaluate(() => window.__spv.app.store.update('images', { enabled: true }));
     await expect.poll(async () => (await info(page)).images.loaded).toBeGreaterThan(0);
+    // element styles are set through the CSSOM, so swatches keep their colours under a policy
+    // that allows no inline styles at all
+    await page.goto('#dataset=demo');
+    await page.reload();
+    await waitReady(page);
+    const swatch = page.locator('.spv-legend-row .spv-swatch').first();
+    expect(await swatch.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe(
+      'rgba(0, 0, 0, 0)',
+    );
     expect(violations).toEqual([]);
+  });
+
+  test('a share link with a non-http(s) URL is refused with a readable error', async ({ page }) => {
+    for (const bad of ['javascript:alert(1)', 'data:application/octet-stream;base64,AAAA']) {
+      await page.goto(`#url=${encodeURIComponent(bad)}`);
+      await page.reload();
+      await page.waitForFunction(
+        () => window.__spv && (window.__spv.ready || window.__spv.error),
+        null,
+        { timeout: 60_000 },
+      );
+      expect(await page.evaluate(() => window.__spv.error)).toMatch(/Only http\(s\) URLs/);
+      await expect(page.locator('.spv-toast.spv-error').first()).toContainText('Only http(s)');
+      expect(new URL(page.url()).pathname).toBe(BASE);
+    }
   });
 
   test('reports its version and build in the debug object, the Help dialog and the D report', async ({

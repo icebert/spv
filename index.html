@@ -2,12 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Delivered as a meta tag because GitHub Pages cannot set headers. connect-src is open
-         because #url= may name any CORS-enabled host; the h5wasm worker runs under its own
-         (same-origin) policy. vite.config.ts loosens style-src-elem for the dev server only. -->
+    <!-- Delivered as a meta tag because GitHub Pages cannot set headers. No inline scripts or
+         styles anywhere (element styles are set through the CSSOM). connect-src is open because
+         #url= may name any CORS-enabled host; the h5wasm worker runs under its own (same-origin)
+         policy. vite.config.ts allows inline styles for the dev server only. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src *; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src *; img-src 'self' data:; font-src 'self'; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />

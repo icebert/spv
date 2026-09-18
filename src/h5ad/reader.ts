@@ -1270,7 +1270,17 @@ export function readSpatialData(
  * Read one tissue image and convert it to RGBA uint8, box-downscaling by an integer factor so the
  * longest side is ≤ `maxSide`. Float images are assumed to be in [0, 1] unless values exceed 1.
  */
+/** Largest image read into memory: 512 M samples (about 13k × 13k RGB), checked before any allocation. */
+export const MAX_IMAGE_SAMPLES = 512 * 1024 * 1024;
+
 export function readImage(src: H5Source, info: ImageInfo, maxSide: number): DecodedImage {
+  const samples = info.height * info.width * info.channels;
+  if (!(info.height > 0 && info.width > 0 && info.channels > 0) || samples > MAX_IMAGE_SAMPLES) {
+    throw new ReaderError(
+      `Image ${info.path} is ${info.width}×${info.height}×${info.channels}, too large to decode in a browser tab; downscale it with scripts/prepare_h5ad.py --downscale-images`,
+      'unsupported',
+    );
+  }
   const raw = src.read(info.path);
   if (!isTypedArray(raw)) throw new ReaderError(`Image ${info.path} is not numeric`, 'unsupported');
   const arr = raw as ArrayLike<number>;

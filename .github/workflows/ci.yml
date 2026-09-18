@@ -20,14 +20,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Verify registry signatures and provenance of every installed package
+        run: npm audit signatures
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
@@ -43,7 +47,7 @@ jobs:
         run: npm run e2e
       - name: Keep Playwright traces and screenshots when a test fails
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: playwright-results
           path: test-results/
