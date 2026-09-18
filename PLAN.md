@@ -210,3 +210,5 @@ well. Playwright's WebKit on the same GPU does not reproduce it. Fix: `PointClou
 of 65,536 points with separate sub-1 MiB buffers (`uIdOffset` keeps ids global); the GPU picker and
 the census swap materials per batch. Chromium, WebKit and the owner's Safari 26.5 report 0 displaced
 cells and a GPU footprint matching the CPU projection within 2 px.
+The graph overlay (`EdgeCloud`) was batched the same way (32,768 edges = 65,536 vertices per
+`LineSegments`, one shared material) at the owner's request.

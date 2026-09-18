@@ -1,13 +1,17 @@
 /**
- * Spatial graph overlay: one `LineSegments` whose vertex shader repeats the point transform for
- * both endpoints of every edge, so an edge disappears whenever either endpoint is hidden (section,
- * clip plane, category mask, user filter). Shares the point cloud's uniform objects.
+ * Spatial graph overlay: `LineSegments` whose vertex shader repeats the point transform for both
+ * endpoints of every edge, so an edge disappears whenever either endpoint is hidden (section, clip
+ * plane, category mask, user filter). Shares the point cloud's uniform objects.
+ *
+ * Drawn in batches of `EDGE_BATCH` edges (65,536 vertices) with separate vertex buffers, all under
+ * 1 MiB, for the same reason as the point cloud: Safari on Metal misreads vertex buffers past 1 MiB.
  */
 import {
   BufferAttribute,
   BufferGeometry,
   Color,
   GLSL3,
+  Group,
   LineSegments,
   ShaderMaterial,
   Sphere,
@@ -104,12 +108,40 @@ void main() {
 
 const NO_SECTION = 0xffff;
 
+/** Edges per draw call: 2 vertices each, 65,536 vertices × 12 bytes stays under 1 MiB. */
+export const EDGE_BATCH = 32768;
+
+interface EdgeArrays {
+  position: Float32Array;
+  aOtherPos: Float32Array;
+  aSection: Uint16Array;
+  aOtherSection: Uint16Array;
+  aVisible: Uint8Array;
+  aOtherVisible: Uint8Array;
+  aCode: Float32Array;
+  aOtherCode: Float32Array;
+}
+type EdgeAttribute = keyof EdgeArrays;
+const ITEM_SIZE: Record<EdgeAttribute, number> = {
+  position: 3,
+  aOtherPos: 3,
+  aSection: 1,
+  aOtherSection: 1,
+  aVisible: 1,
+  aOtherVisible: 1,
+  aCode: 1,
+  aOtherCode: 1,
+};
+
 export class EdgeCloud {
-  readonly object: LineSegments;
-  readonly geometry = new BufferGeometry();
+  /** All batches; add this to the scene. */
+  readonly object = new Group();
   readonly material: ShaderMaterial;
+  private batches: { lines: LineSegments; geometry: BufferGeometry }[] = [];
+  private arrays: EdgeArrays | null = null;
   private i = new Uint32Array(0);
   private j = new Uint32Array(0);
+  private valid: Uint8Array = new Uint8Array(0);
   nEdges = 0;
 
   constructor(pointUniforms: Record<string, IUniform>) {
@@ -125,11 +157,19 @@ export class EdgeCloud {
       transparent: true,
       depthWrite: false,
     });
-    this.geometry.boundingSphere = new Sphere(new Vector3(), 4);
-    this.object = new LineSegments(this.geometry, this.material);
-    this.object.frustumCulled = false;
-    this.object.renderOrder = 5; // after image planes, before points
     this.object.name = 'spv-edges';
+  }
+
+  get batchCount(): number {
+    return this.batches.length;
+  }
+
+  private clearBatches(): void {
+    for (const b of this.batches) {
+      this.object.remove(b.lines);
+      b.geometry.dispose();
+    }
+    this.batches = [];
   }
 
   /** Build per-vertex attributes (two vertices per edge, each carrying its partner). */
@@ -142,12 +182,16 @@ export class EdgeCloud {
   ): void {
     this.nEdges = nEdges;
     const nv = nEdges * 2;
-    const pos = new Float32Array(nv * 3);
-    const other = new Float32Array(nv * 3);
-    const sec = new Uint16Array(nv);
-    const osec = new Uint16Array(nv);
-    const vis = new Uint8Array(nv);
-    const ovis = new Uint8Array(nv);
+    const arr: EdgeArrays = {
+      position: new Float32Array(nv * 3),
+      aOtherPos: new Float32Array(nv * 3),
+      aSection: new Uint16Array(nv),
+      aOtherSection: new Uint16Array(nv),
+      aVisible: new Uint8Array(nv),
+      aOtherVisible: new Uint8Array(nv),
+      aCode: new Float32Array(nv).fill(-1),
+      aOtherCode: new Float32Array(nv).fill(-1),
+    };
     this.i = new Uint32Array(nEdges);
     this.j = new Uint32Array(nEdges);
     for (let e = 0; e < nEdges; e++) {
@@ -159,69 +203,77 @@ export class EdgeCloud {
         [2 * e, a, b],
         [2 * e + 1, b, a],
       ] as const) {
-        pos[v * 3] = xyz[self * 3];
-        pos[v * 3 + 1] = xyz[self * 3 + 1];
-        pos[v * 3 + 2] = xyz[self * 3 + 2];
-        other[v * 3] = xyz[partner * 3];
-        other[v * 3 + 1] = xyz[partner * 3 + 1];
-        other[v * 3 + 2] = xyz[partner * 3 + 2];
-        sec[v] = sectionOf ? sectionOf[self] : NO_SECTION;
-        osec[v] = sectionOf ? sectionOf[partner] : NO_SECTION;
-        vis[v] = valid[self];
-        ovis[v] = valid[partner];
+        arr.position[v * 3] = xyz[self * 3];
+        arr.position[v * 3 + 1] = xyz[self * 3 + 1];
+        arr.position[v * 3 + 2] = xyz[self * 3 + 2];
+        arr.aOtherPos[v * 3] = xyz[partner * 3];
+        arr.aOtherPos[v * 3 + 1] = xyz[partner * 3 + 1];
+        arr.aOtherPos[v * 3 + 2] = xyz[partner * 3 + 2];
+        arr.aSection[v] = sectionOf ? sectionOf[self] : NO_SECTION;
+        arr.aOtherSection[v] = sectionOf ? sectionOf[partner] : NO_SECTION;
+        arr.aVisible[v] = valid[self];
+        arr.aOtherVisible[v] = valid[partner];
       }
     }
-    const g = this.geometry;
-    g.setAttribute('position', new BufferAttribute(pos, 3));
-    g.setAttribute('aOtherPos', new BufferAttribute(other, 3));
-    g.setAttribute('aSection', new BufferAttribute(sec, 1));
-    g.setAttribute('aOtherSection', new BufferAttribute(osec, 1));
-    g.setAttribute('aVisible', new BufferAttribute(vis, 1));
-    g.setAttribute('aOtherVisible', new BufferAttribute(ovis, 1));
-    g.setAttribute('aCode', new BufferAttribute(new Float32Array(nv).fill(-1), 1));
-    g.setAttribute('aOtherCode', new BufferAttribute(new Float32Array(nv).fill(-1), 1));
+    this.arrays = arr;
     this.valid = valid;
+    this.clearBatches();
+    for (let start = 0; start < nv; start += EDGE_BATCH * 2) {
+      const count = Math.min(EDGE_BATCH * 2, nv - start);
+      const geometry = new BufferGeometry();
+      for (const name of Object.keys(arr) as EdgeAttribute[]) {
+        const k = ITEM_SIZE[name];
+        geometry.setAttribute(
+          name,
+          new BufferAttribute(arr[name].subarray(start * k, (start + count) * k), k),
+        );
+      }
+      geometry.boundingSphere = new Sphere(new Vector3(), 4);
+      const lines = new LineSegments(geometry, this.material);
+      lines.frustumCulled = false;
+      lines.renderOrder = 5; // after image planes, before points
+      lines.name = `spv-edges-${start / 2}`;
+      this.object.add(lines);
+      this.batches.push({ lines, geometry });
+    }
   }
 
-  private valid: Uint8Array = new Uint8Array(0);
+  private touch(name: EdgeAttribute): void {
+    for (const b of this.batches)
+      (b.geometry.getAttribute(name) as BufferAttribute).needsUpdate = true;
+  }
 
   /** Category codes of the endpoints (from the current categorical colouring), or null. */
   setCodes(codes: ArrayLike<number> | null): void {
-    const a = this.geometry.getAttribute('aCode') as BufferAttribute | undefined;
-    const b = this.geometry.getAttribute('aOtherCode') as BufferAttribute | undefined;
-    if (!a || !b) return;
-    const ca = a.array as Float32Array;
-    const cb = b.array as Float32Array;
+    const arr = this.arrays;
+    if (!arr) return;
     for (let e = 0; e < this.nEdges; e++) {
       const ci = codes ? codes[this.i[e]] : -1;
       const cj = codes ? codes[this.j[e]] : -1;
-      ca[2 * e] = ci;
-      cb[2 * e] = cj;
-      ca[2 * e + 1] = cj;
-      cb[2 * e + 1] = ci;
+      arr.aCode[2 * e] = ci;
+      arr.aOtherCode[2 * e] = cj;
+      arr.aCode[2 * e + 1] = cj;
+      arr.aOtherCode[2 * e + 1] = ci;
     }
-    a.needsUpdate = true;
-    b.needsUpdate = true;
+    this.touch('aCode');
+    this.touch('aOtherCode');
   }
 
   /** User filter mask (subsample, in_tissue) combined with coordinate validity. */
   setUserMask(mask: Uint8Array | null): void {
-    const a = this.geometry.getAttribute('aVisible') as BufferAttribute | undefined;
-    const b = this.geometry.getAttribute('aOtherVisible') as BufferAttribute | undefined;
-    if (!a || !b) return;
-    const va = a.array as Uint8Array;
-    const vb = b.array as Uint8Array;
+    const arr = this.arrays;
+    if (!arr) return;
     const ok = (k: number) => (this.valid[k] && (!mask || mask[k]) ? 1 : 0);
     for (let e = 0; e < this.nEdges; e++) {
       const vi = ok(this.i[e]);
       const vj = ok(this.j[e]);
-      va[2 * e] = vi;
-      vb[2 * e] = vj;
-      va[2 * e + 1] = vj;
-      vb[2 * e + 1] = vi;
+      arr.aVisible[2 * e] = vi;
+      arr.aOtherVisible[2 * e] = vj;
+      arr.aVisible[2 * e + 1] = vj;
+      arr.aOtherVisible[2 * e + 1] = vi;
     }
-    a.needsUpdate = true;
-    b.needsUpdate = true;
+    this.touch('aVisible');
+    this.touch('aOtherVisible');
   }
 
   setStyle(color: string, opacity: number): void {
@@ -230,7 +282,7 @@ export class EdgeCloud {
   }
 
   dispose(): void {
-    this.geometry.dispose();
+    this.clearBatches();
     this.material.dispose();
   }
 }

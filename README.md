@@ -243,7 +243,8 @@ Initial JS payload: 174 kB gzipped (Three.js included). The worker chunk with th
 - **Deviations from the original spec** (ESLint flat config, TypeScript 5.9 instead of 7, embedded WASM, fixture sizes) and everything the demo file changed about the design are recorded in `PLAN.md`.
 
 Points are drawn in batches of 65,536 (one `THREE.Points` each, sharing shaders and uniforms;
-ids stay global through a per-batch offset). This keeps every vertex buffer under 1 MiB, which
+ids stay global through a per-batch offset), and graph edges in batches of 32,768 (65,536
+vertices). This keeps every vertex buffer under 1 MiB, which
 works around a Safari/Metal bug seen on an AMD iMac: past the first 1 MiB of a position buffer
 the GPU read other rows' coordinates, so the tail of one section and every later section were
 drawn in the wrong place. The `D` report's "Displaced cells" line detects this class of problem.
