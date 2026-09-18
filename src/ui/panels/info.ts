@@ -188,7 +188,7 @@ export function infoPanel(app: App): Panel {
                 'div',
                 null,
                 el('b', null, l.id),
-                ` — images: ${l.images.map((im) => `${im.key} ${im.width}×${im.height}×${im.channels} ${im.dtype}`).join(', ') || 'none'}; scalefactors: ${
+                `: images ${l.images.map((im) => `${im.key} ${im.width}×${im.height}×${im.channels} ${im.dtype}`).join(', ') || 'none'}; scalefactors: ${
                   Object.entries(l.scalefactors)
                     .map(([k, v]) => `${k}=${v}`)
                     .join(', ') || 'none'

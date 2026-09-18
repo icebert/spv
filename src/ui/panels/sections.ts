@@ -7,6 +7,7 @@ import {
   clear,
   el,
   fmtInt,
+  fmtNum,
   group,
   note,
   radio,
@@ -165,6 +166,36 @@ export function sectionsPanel(app: App): Panel {
     }
     const l = app.store.slice('layout');
     const hidden = new Set(l.hidden);
+    const anyImage = sections.some((s) => s.hasImage);
+    // z staircase: where each section is actually drawn along z (unit-cube units, alignment
+    // included), normalised to the span of the whole stack. Read down the list, the ticks show
+    // the real spacing. Planar layouts (tile, single) have no z to show.
+    const res = app.layoutResult;
+    const zScale = app.layoutParams?.zScale ?? 1;
+    const drawnZ: number[] = [];
+    let nZ = 0;
+    let zLo = Infinity;
+    let zHi = -Infinity;
+    let fileLo = Infinity;
+    let fileHi = -Infinity;
+    if (res && !res.planar) {
+      for (const s of sections) {
+        const g = app.geoms[s.ordinal];
+        const o = res.offsets[s.ordinal];
+        if (!g || !o) break;
+        const z = (res.nativeZ ? (g.z ?? g.center[2]) * zScale : 0) + o.dz;
+        drawnZ[s.ordinal] = z;
+        nZ++;
+        if (z < zLo) zLo = z;
+        if (z > zHi) zHi = z;
+        if (s.z !== null) {
+          const fz = s.z + (l.alignment[s.ordinal]?.dz ?? 0);
+          if (fz < fileLo) fileLo = fz;
+          if (fz > fileHi) fileHi = fz;
+        }
+      }
+    }
+    const showZ = nZ === sections.length && zHi - zLo > 1e-9;
     listBox.appendChild(
       el(
         'div',
@@ -215,9 +246,13 @@ export function sectionsPanel(app: App): Panel {
                     : '🖼·',
           )
         : el('span', { className: 'spv-badge', style: 'opacity:.4' }, '—');
+      const isHidden = hidden.has(s.ordinal);
       const r = el(
         'div',
-        { className: `spv-list-row ${l.current === s.ordinal ? 'spv-current' : ''}`, title },
+        {
+          className: `spv-list-row ${l.current === s.ordinal ? 'spv-current' : ''} ${isHidden ? 'spv-hidden' : ''}`,
+          title,
+        },
         cb,
         el(
           'span',
@@ -228,8 +263,18 @@ export function sectionsPanel(app: App): Panel {
           },
           s.name,
         ),
-        el('span', { className: 'spv-badge' }, fmtInt(s.nCells)),
-        img,
+        el('span', 'spv-count', fmtInt(s.nCells)),
+        showZ
+          ? el(
+              'span',
+              {
+                className: 'spv-zbar',
+                style: `--z:${((((drawnZ[s.ordinal] ?? zLo) - zLo) / (zHi - zLo)) * 100).toFixed(2)}%`,
+              },
+              el('i'),
+            )
+          : null,
+        anyImage ? img : null,
         button('solo', () => app.soloSection(s.ordinal), {
           className: 'spv-small',
           title: 'Show only this section',
@@ -248,6 +293,16 @@ export function sectionsPanel(app: App): Panel {
             r.style.height = '26px';
             return r;
           }),
+        ),
+      );
+    if (showZ)
+      listBox.appendChild(
+        el(
+          'div',
+          'spv-zbar-legend',
+          res?.nativeZ && Number.isFinite(fileLo)
+            ? `z ${fmtNum(fileLo)} to ${fmtNum(fileHi)}, file units`
+            : 'z at uniform spacing',
         ),
       );
   };
@@ -375,7 +430,7 @@ export function sectionsPanel(app: App): Panel {
       el(
         'div',
         { style: 'font-size:12px;color:var(--spv-muted)' },
-        `${cur.name} — offsets in file units, rotation in degrees about the section centre`,
+        `${cur.name}: offsets in file units, rotation in degrees about the section centre`,
       ),
       num('X offset', a.dx, 'dx', step),
       num('Y offset', a.dy, 'dy', step),

@@ -30,8 +30,9 @@ export function createSelection(app: App, viewport: HTMLElement, canvas: HTMLCan
     ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (path.length < 2) return;
-    ctx.strokeStyle = '#66c2a5';
-    ctx.fillStyle = 'rgba(102,194,165,0.12)';
+    const dark = app.viewer.isDark;
+    ctx.strokeStyle = dark ? '#ffffff' : '#111111';
+    ctx.fillStyle = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
     ctx.lineWidth = 1.5;
     ctx.setLineDash([6, 4]);
     ctx.beginPath();

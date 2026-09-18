@@ -37,16 +37,16 @@ export function histogramWidget(app: App): HTMLElement {
     const n = h.bins.length;
     const bw = W / n;
     const dark = app.viewer.isDark;
-    ctx.fillStyle = dark ? '#6b7280' : '#9ca3af';
+    ctx.fillStyle = dark ? '#7a7a7a' : '#a6a6a6';
     for (let i = 0; i < n; i++) {
       const v = Math.sqrt(h.bins[i] / (h.max || 1)) * (H - 8);
       ctx.fillRect(i * bw + 0.5, H - v, Math.max(1, bw - 1), v);
     }
     const lo = xOf(cb.vmin);
     const hi = xOf(cb.vmax);
-    ctx.fillStyle = dark ? 'rgba(102,194,165,0.18)' : 'rgba(17,119,51,0.15)';
+    ctx.fillStyle = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)';
     ctx.fillRect(lo, 0, Math.max(0, hi - lo), H);
-    ctx.strokeStyle = '#66c2a5';
+    ctx.strokeStyle = dark ? '#ffffff' : '#111111';
     ctx.lineWidth = 2;
     for (const x of [lo, hi]) {
       ctx.beginPath();
@@ -54,7 +54,7 @@ export function histogramWidget(app: App): HTMLElement {
       ctx.lineTo(x, H);
       ctx.stroke();
     }
-    label.textContent = `histogram of ${cb.label} (sqrt scale, 64 bins) — drag the handles to set an explicit range`;
+    label.textContent = `Histogram of ${cb.label}, square-root scale, 64 bins. Drag the handles to set the range.`;
   };
 
   canvas.addEventListener('pointerdown', (e) => {

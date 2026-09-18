@@ -61,7 +61,7 @@ export function coordinatesPanel(app: App): Panel {
             'detected',
             s.spatial.key
               ? `${s.spatial.key} (${s.spatial.method}${s.spatial.zSource ? `, z: ${s.spatial.zSource}` : ''})`
-              : 'nothing — choose X and Y below',
+              : 'nothing; choose X and Y below',
           ],
           [
             'library column',

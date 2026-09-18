@@ -1,3 +1,5 @@
+// Self-hosted typeface (see the note at the top of style.css); no third-party requests.
+import '@fontsource-variable/atkinson-hyperlegible-next/wght.css';
 import './style.css';
 import { App } from './app';
 import { LAYOUT_MODES } from './render/sections';

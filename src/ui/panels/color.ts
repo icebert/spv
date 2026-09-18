@@ -322,7 +322,7 @@ export function colorPanel(app: App): Panel {
     const lg = app.legend;
     if (!lg) return;
     const nCats = lg.categories.length;
-    const g = group(`Legend — ${lg.key} (${nCats})`);
+    const g = group(`Legend for ${lg.key} (${nCats})`);
     g.appendChild(
       el(
         'div',
@@ -390,7 +390,7 @@ export function colorPanel(app: App): Panel {
     const cb = app.colorbar;
     const c = app.store.slice('color');
     if (!cb) return;
-    const g = group(`Range — ${cb.label}`);
+    const g = group(`Range for ${cb.label}`);
     if (cb.blend) {
       g.appendChild(
         el(

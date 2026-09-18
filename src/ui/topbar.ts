@@ -95,13 +95,15 @@ export function createTopbar(app: App): HTMLElement {
     const total = app.spatial?.n ?? 0;
     const visible = app.visibleCount();
     const parts: (string | HTMLElement)[] = [];
+    const sep = d.name ? ', ' : '';
     if (d.name) parts.push(el('b', null, d.name));
-    if (app.status === 'loading') parts.push(` · ${app.statusMessage || 'loading…'}`);
-    else if (total)
-      parts.push(
-        ` · ${visible < total ? `${fmtInt(visible)} of ${fmtInt(total)}` : fmtInt(total)} cells`,
-      );
-    if (app.sections.length > 1) parts.push(` · ${app.sections.length} sections`);
+    if (app.status === 'loading') parts.push(`${sep}${app.statusMessage || 'loading…'}`);
+    else if (total) {
+      const cells =
+        visible < total ? `${fmtInt(visible)} of ${fmtInt(total)} cells` : `${fmtInt(total)} cells`;
+      const secs = app.sections.length > 1 ? ` in ${fmtInt(app.sections.length)} sections` : '';
+      parts.push(`${sep}${cells}${secs}`);
+    }
     name.replaceChildren(...parts);
     const l = app.store.slice('layout');
     const cur = app.currentSection;

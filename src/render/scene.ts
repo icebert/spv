@@ -108,8 +108,9 @@ export class Viewer {
 
   setBackground(dark: boolean, hex?: string): void {
     this.dark = dark;
-    this.renderer.setClearColor(new Color(hex ?? (dark ? '#0f1115' : '#f5f6f8')), 1);
-    const line = dark ? 0x6b7280 : 0x9ca3af;
+    // Must match --spv-bg in style.css: neutral grey so the chrome never tints the data colours.
+    this.renderer.setClearColor(new Color(hex ?? (dark ? '#161616' : '#ffffff')), 1);
+    const line = dark ? 0x707070 : 0x9a9a9a;
     if (this.bboxHelper) (this.bboxHelper.material as unknown as { color: Color }).color.set(line);
     if (this.grid) {
       this.scene.remove(this.grid);
@@ -164,7 +165,7 @@ export class Viewer {
     if (!this.showBBox) return;
     const b = this.lastBounds;
     const box = new Box3(new Vector3(...b.min), new Vector3(...b.max));
-    this.bboxHelper = new Box3Helper(box, this.dark ? 0x6b7280 : 0x9ca3af);
+    this.bboxHelper = new Box3Helper(box, this.dark ? 0x707070 : 0x9a9a9a);
     this.scene.add(this.bboxHelper);
   }
 
@@ -180,8 +181,8 @@ export class Viewer {
     this.grid = new GridHelper(
       size,
       10,
-      this.dark ? 0x4b5563 : 0xb0b5bd,
-      this.dark ? 0x2a2f3a : 0xd6d9de,
+      this.dark ? 0x4a4a4a : 0xbdbdbd,
+      this.dark ? 0x2e2e2e : 0xe3e3e3,
     );
     this.grid.rotation.x = Math.PI / 2; // GridHelper lies in XZ; sections live in XY
     this.grid.position.set(
