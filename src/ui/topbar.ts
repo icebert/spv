@@ -1,6 +1,7 @@
 import type { App } from '../app';
 import { button, el, fmtInt } from './dom';
 import { openHelp } from './help';
+import { icon } from './icons';
 import { toast } from './toast';
 
 export function createTopbar(app: App): HTMLElement {
@@ -68,7 +69,7 @@ export function createTopbar(app: App): HTMLElement {
   });
   const help = button('?', openHelp, { className: 'spv-icon', title: 'Help' });
   const toggle = button(
-    '☰',
+    icon('menu'),
     () => app.store.update('ui', { sidebar: !app.store.slice('ui').sidebar }),
     { className: 'spv-icon', title: 'Toggle sidebar (H)' },
   );

@@ -8,7 +8,7 @@ export function histogramWidget(app: App): HTMLElement {
   const canvas = el('canvas', {
     width: W * 2,
     height: H * 2,
-    style: `width:${W}px;height:${H}px;display:block;cursor:ew-resize;border-radius:4px;background:var(--spv-panel-2)`,
+    style: `width:${W}px;height:${H}px;display:block;cursor:ew-resize;border-radius:3px;background:var(--spv-panel-2)`,
   });
   const label = el('div', { style: 'font-size:11px;color:var(--spv-muted);margin-top:2px' });
   const root = el('div', { style: 'margin:6px 0' }, canvas, label);

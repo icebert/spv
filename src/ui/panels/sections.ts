@@ -15,6 +15,7 @@ import {
   slider,
   virtualList,
 } from '../dom';
+import { icon } from '../icons';
 import type { Panel } from '../sidebar';
 
 const LAYOUT_LABELS: Record<LayoutMode, string> = {
@@ -113,11 +114,19 @@ export function sectionsPanel(app: App): Panel {
       el(
         'div',
         'spv-row',
-        button('◀', () => app.stepSection(-1), { title: 'Previous section (←)' }),
-        button(l.playing ? '❚❚' : '▶', () => app.store.update('layout', { playing: !l.playing }), {
-          title: 'Play / pause (Space)',
+        button(icon('step-back'), () => app.stepSection(-1), {
+          className: 'spv-icon',
+          title: 'Previous section (←)',
         }),
-        button('▶|', () => app.stepSection(1), { title: 'Next section (→)' }),
+        button(
+          icon(l.playing ? 'pause' : 'play'),
+          () => app.store.update('layout', { playing: !l.playing }),
+          { className: 'spv-icon', title: l.playing ? 'Pause (Space)' : 'Play (Space)' },
+        ),
+        button(icon('step-forward'), () => app.stepSection(1), {
+          className: 'spv-icon',
+          title: 'Next section (→)',
+        }),
         el(
           'span',
           { style: 'flex:1;font-variant-numeric:tabular-nums' },

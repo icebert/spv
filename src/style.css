@@ -299,7 +299,58 @@ input[type='range'] {
   font-size: 12px;
 }
 .spv-btn.spv-icon {
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px 7px;
+}
+.spv-btn svg {
+  display: block;
+}
+/* file picker: a label styled as a button around a visually hidden <input type="file"> */
+.spv-file {
+  display: inline-block;
+}
+.spv-file:focus-within {
+  outline: 2px solid var(--spv-ink);
+  outline-offset: 2px;
+}
+.spv-file-name {
+  color: var(--spv-muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spv-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+input[type='color'] {
+  width: 30px;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid var(--spv-border);
+  border-radius: var(--spv-radius);
+  background: var(--spv-panel-2);
+  cursor: pointer;
+}
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
 }
 .spv-select,
 .spv-input {
@@ -515,7 +566,7 @@ input[type='range'] {
 }
 .spv-progress {
   height: 4px;
-  background: var(--spv-panel-2);
+  background: var(--spv-border);
   border-radius: 2px;
   overflow: hidden;
   margin: 6px 0;
@@ -703,6 +754,12 @@ input[type='range'] {
 }
 .spv-drop.spv-active {
   display: flex;
+}
+.spv-drop span {
+  padding: 10px 16px;
+  background: var(--spv-panel);
+  border: 1px solid var(--spv-border);
+  border-radius: var(--spv-radius);
 }
 .spv-selection-bar {
   position: absolute;

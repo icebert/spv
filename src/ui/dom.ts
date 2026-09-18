@@ -46,10 +46,11 @@ export function clear(node: Node): void {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
 
+/** A button. An icon (any Node) label gets `aria-label` from `ariaLabel` or the title. */
 export function button(
-  label: string,
+  label: string | Node,
   onClick: (e: MouseEvent) => void,
-  opts: { className?: string; title?: string; disabled?: boolean } = {},
+  opts: { className?: string; title?: string; disabled?: boolean; ariaLabel?: string } = {},
 ): HTMLButtonElement {
   const b = el(
     'button',
@@ -57,6 +58,7 @@ export function button(
       className: `spv-btn ${opts.className ?? ''}`.trim(),
       type: 'button',
       title: opts.title ?? null,
+      'aria-label': opts.ariaLabel ?? (typeof label === 'string' ? null : (opts.title ?? null)),
     },
     label,
   );

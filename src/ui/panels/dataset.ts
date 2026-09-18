@@ -15,9 +15,18 @@ export function datasetPanel(app: App): Panel {
   const errorBox = el('div');
 
   const urlInput = textInput('https://…/dataset.h5ad', (v) => v && void app.openUrl(v));
-  const fileInput = el('input', { type: 'file', accept: '.h5ad,.h5', className: 'spv-input' });
+  // The native file control is replaced by a label styled as a button; the input stays in the
+  // DOM (visually hidden, still focusable) so the picker, keyboard and tests keep working.
+  const fileInput = el('input', {
+    type: 'file',
+    accept: '.h5ad,.h5',
+    className: 'spv-visually-hidden',
+  });
+  const fileName = el('span', 'spv-file-name');
+  const filePick = el('label', 'spv-btn spv-file', 'Choose a file…', fileInput);
   fileInput.addEventListener('change', () => {
     const f = fileInput.files?.[0];
+    fileName.textContent = f ? `${f.name} (${fmtBytes(f.size)})` : '';
     if (f) void app.openFile(f);
   });
 
@@ -39,7 +48,7 @@ export function datasetPanel(app: App): Panel {
     ),
     group(
       'Open local file',
-      fileInput,
+      el('div', 'spv-row', filePick, fileName),
       note(
         'Or drop a .h5ad anywhere on the page. Files are read in your browser only and never uploaded.',
       ),
@@ -57,7 +66,7 @@ export function datasetPanel(app: App): Panel {
     }
     const cur = app.store.slice('dataset');
     const options = [
-      { value: '', label: '— choose a dataset —' },
+      { value: '', label: 'Choose a dataset…' },
       ...app.manifest.map((d) => ({
         value: d.id,
         label: `${d.name}${d.size_bytes ? ` (${fmtBytes(d.size_bytes)})` : ''}`,
@@ -143,7 +152,7 @@ export function datasetPanel(app: App): Panel {
       progressWrap.style.display = p ? 'block' : 'none';
       if (p) {
         const pct = p.total ? Math.round((100 * p.done) / p.total) : 0;
-        progressLabel.textContent = `${stageLabel(p.stage)} ${p.total ? `${pct}%` : ''} ${p.message ?? ''}`;
+        progressLabel.textContent = progressText(p);
         (progressBar.firstElementChild as HTMLElement).style.width = `${pct}%`;
       }
     }
@@ -158,7 +167,18 @@ export function datasetPanel(app: App): Panel {
   return { id: 'dataset', title: 'Dataset', el: root };
 }
 
-function stageLabel(stage: string): string {
+/** "Reading coordinates, 40%, 9.6 MB" — one line for the panel and the viewport notice. */
+export function progressText(p: {
+  stage: string;
+  done: number;
+  total?: number | null;
+  message?: string | null;
+}): string {
+  const pct = p.total ? `${Math.round((100 * p.done) / p.total)}%` : '';
+  return [stageLabel(p.stage), pct, p.message ?? ''].filter(Boolean).join(', ');
+}
+
+export function stageLabel(stage: string): string {
   return (
     {
       engine: 'Starting HDF5 engine',

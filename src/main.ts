@@ -9,7 +9,7 @@ import { openHelp } from './ui/help';
 import { appearancePanel } from './ui/panels/appearance';
 import { colorPanel } from './ui/panels/color';
 import { coordinatesPanel } from './ui/panels/coordinates';
-import { datasetPanel } from './ui/panels/dataset';
+import { datasetPanel, progressText } from './ui/panels/dataset';
 import { filterPanel } from './ui/panels/filter';
 import { infoPanel } from './ui/panels/info';
 import { sectionsPanel } from './ui/panels/sections';
@@ -127,7 +127,7 @@ function main(): void {
   createSelection(app, viewport, app.viewer.renderer.domElement);
   const notice = el('div', { className: 'spv-overlay-notice', style: 'display:none' });
   viewport.appendChild(notice);
-  const drop = el('div', 'spv-drop', 'Drop a .h5ad file to open it');
+  const drop = el('div', 'spv-drop', el('span', null, 'Drop a .h5ad file to open it'));
   document.body.appendChild(drop);
 
   app.on((e) => {
@@ -145,8 +145,7 @@ function main(): void {
             : '';
     }
     if (e.type === 'progress' && e.progress && app.status === 'loading') {
-      const p = e.progress;
-      notice.textContent = `${p.stage} ${p.total ? `${Math.round((100 * p.done) / p.total)}%` : ''} ${p.message ?? ''}`;
+      notice.textContent = progressText(e.progress);
     }
   });
   app.store.on('ui', (v) => root.classList.toggle('spv-sidebar-hidden', !v.sidebar));

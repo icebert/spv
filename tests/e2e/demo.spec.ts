@@ -392,7 +392,7 @@ test.describe('nice-to-haves 5-7', () => {
       timeout: 60_000,
     });
     await page.getByRole('tab', { name: 'Color' }).click();
-    await page.fill('input[placeholder^="Blend with"]', b);
+    await page.getByPlaceholder('Second gene…').fill(b);
     await page.waitForSelector('.spv-panel.spv-active .spv-autocomplete-item');
     await page.keyboard.press('Enter');
     await page.waitForFunction((l) => window.__spv.info().colorbar?.label === l, `${a} + ${b}`, {

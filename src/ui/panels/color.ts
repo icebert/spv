@@ -195,9 +195,7 @@ export function colorPanel(app: App): Panel {
     wrap.append(input, list);
     geneBox.appendChild(wrap);
     if (c.source === 'gene' && c.key) {
-      const b = geneSearch(app, 'Blend with a second gene…', c.gene2 ?? '', (name) =>
-        app.blendWithGene(name),
-      );
+      const b = geneSearch(app, 'Second gene…', c.gene2 ?? '', (name) => app.blendWithGene(name));
       const colA = el('input', {
         type: 'color',
         value: c.blendColors[0],
