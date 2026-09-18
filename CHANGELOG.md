@@ -5,6 +5,10 @@ and the `D` diagnostic report show it together with the build stamp (short commi
 
 ## Unreleased
 
+- CI: `.nvmrc` moves from Node 22 to Node 24 (current LTS). Its bundled npm 11 verifies the
+  registry attestations that npm 10 rejected with `EMISSINGSIGNATUREKEY`, which failed
+  `npm audit signatures` on the first GitHub Actions run.
+
 - Tablets: touch targets grow to 36 px on coarse pointers; a long press stands in for Shift-click
   (solo) on legend entries and sections; the selection bar offers Lasso and Box buttons; a
   Fullscreen button appears where the browser allows it; the pinned tooltip sits above the finger;
