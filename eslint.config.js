@@ -37,5 +37,10 @@ export default defineConfig(
     files: ['src/h5ad/worker.ts'],
     languageOptions: { globals: { ...globals.worker } },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { 'no-console': 'off' },
+  },
   prettier,
 );

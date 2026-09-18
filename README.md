@@ -160,6 +160,15 @@ Python environment: `uv venv .venv --python 3.12 && uv pip install --python .ven
 
 For a root site (repository named `<user>.github.io`) change `VITE_BASE` in the workflow to `/`. Locally, `npm run dev` serves at `/`, and `VITE_BASE=/spv/ npm run build && VITE_BASE=/spv/ npm run preview` reproduces the sub-path deployment.
 
+Pull requests and pushes to other branches run the same gates in `.github/workflows/ci.yml` without deploying: `npm audit` on the runtime dependencies, typecheck, lint, unit tests, a production build, the bundle budget (`scripts/bundle_budget.mjs`, per-file size limits for `dist/assets/`) and the end-to-end suite; Playwright traces are kept as an artifact when a test fails. Dependabot opens weekly update pull requests for npm packages and the actions. Node is pinned by `.nvmrc`.
+
+## Hosting notes
+
+- **Browser support.** Current Chrome, Edge, Firefox and Safari with WebGL 2. Without WebGL 2, or with JavaScript off, the page says so and what to do; if the app fails while starting, the same page shows the error and the build stamp.
+- **Content Security Policy.** `index.html` carries a `<meta http-equiv="Content-Security-Policy">` (GitHub Pages cannot send headers): scripts, workers, styles and fonts only from the site itself, no plugins or embedded objects, no inline scripts. `connect-src` stays open because `#url=` may point at any CORS-enabled host. The dev server loosens one directive (`style-src-elem`) because Vite injects CSS as inline `<style>` elements; builds and `vite preview` use the strict policy, and the end-to-end suite fails on any violation. Nothing is loaded from third parties: the typeface, the WASM engine and the compression plugins ship with the site, and the page sends no `Referer` header.
+- **Self-hosting.** Any static file server works. Serve `assets/` with `Cache-Control: public, max-age=31536000, immutable` (file names carry content hashes) and `index.html` plus `data/` with a short max-age. `.h5ad` files need `Accept-Ranges: bytes`; add CORS (`GET, HEAD`, exposing `Content-Range`, `Content-Length` and `Accept-Ranges`) when they live on another origin. Sending the same policy as a `Content-Security-Policy` header, plus `X-Content-Type-Options: nosniff`, is a good idea where headers are available.
+- **Versions and support.** `package.json` holds the version; the Help dialog and `window.__spv.version` show it, and every build carries a stamp (short commit hash, `+` when built from uncommitted changes, and the commit date). Uncaught errors and unhandled promise rejections show one toast per distinct message every ten seconds and are kept in a short log; the `D` report starts with version, build and browser and ends with the last errors, so a pasted report is enough to reproduce a problem. If the data worker crashes (WASM abort, out of memory), the next file open starts a fresh worker. `CHANGELOG.md` records what changed between versions.
+
 ## Development
 
 ```sh
@@ -167,15 +176,18 @@ npm ci
 npm run dev          # Vite dev server with data/ served at /data/ (Range-capable)
 npm run typecheck    # three tsconfigs: app (DOM), worker (WebWorker), node (tests/config)
 npm run lint         # eslint + prettier --check
+npm run check        # typecheck + lint + unit tests (the pre-push gate)
 npm test             # vitest: reader against every fixture, colormaps, palettes, layouts, URL state
 npm run e2e          # playwright: builds to dist-e2e/ and serves it at http://localhost:4174/spv/ (never touches dist/ or a running preview)
 npm run build && npm run preview
+npm run budget       # per-file size budgets for dist/assets (also run in CI)
 python scripts/make_fixtures.py        # regenerate tests/fixtures (committed)
 python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synthetic files (gitignored)
 ```
 
 If a browser draws the view wrongly, press `D` and paste the report (it is copied to the
-clipboard and printed to the console). The WebGL context can be created differently from the page
+clipboard and printed to the console). It starts with the version, build stamp and browser and
+ends with the last errors the page saw. The WebGL context can be created differently from the page
 URL, before the `#`: `?gl=noaa` (no antialiasing), `?gl=opaque` (no alpha channel),
 `?gl=preserve` (preserveDrawingBuffer), or a comma-separated combination.
 
@@ -194,7 +206,7 @@ URL, before the `#`: `?gl=noaa` (no antialiasing), `?gl=opaque` (no alpha channe
 | `L` | Cycle layout mode |
 | `O` | Toggle orthographic camera |
 | `X` | Lasso / box selection mode (Shift-drag for a box) |
-| `D` | Copy a diagnostic report to the clipboard: sections the GPU drew (pixel census, offscreen and on the canvas) and where, versus the CPU projection; draw calls per frame; granted context attributes; coordinate-buffer check |
+| `D` | Copy a diagnostic report to the clipboard: version, build and browser; sections the GPU drew (pixel census, offscreen and on the canvas) and where, versus the CPU projection; draw calls per frame; granted context attributes; coordinate-buffer check; the last errors seen |
 | `Esc` | Clear the pinned cell / the selection / leave selection mode |
 | `?` | Help |
 

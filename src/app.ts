@@ -3,6 +3,8 @@
  * store changes to the GPU side, and exposes actions for the UI (open datasets, colour, step
  * sections, pick, screenshot, share). Panels only talk to the store and to this class.
  */
+import { versionLine } from './version';
+import { recentErrors, recordError } from './util/errorLog';
 import type { ColormapName } from './color/colormaps';
 import { paletteFor } from './color/palettes';
 import { H5adClient } from './h5ad/client';
@@ -299,6 +301,7 @@ export class App {
   }
 
   notice(message: string, kind: 'error' | 'warn' | 'info' = 'info'): void {
+    if (kind === 'error') recordError('notice', message);
     this.emit({ type: 'notice', message, kind });
   }
 
@@ -438,6 +441,11 @@ export class App {
       this.emit({ type: 'progress', progress: p });
     };
     try {
+      if (this.client?.dead) {
+        // The worker crashed (uncaught error or WASM abort); only a fresh one can read again.
+        this.client.terminate();
+        this.client = null;
+      }
       if (!this.client) {
         this.client = new H5adClient();
         this.client.onLog = (level, msg) => {
@@ -516,6 +524,11 @@ export class App {
         return;
       }
       this.errorMessage = this.describeError(e);
+      if (e.code === 'worker' || /\bAborted\(|out of memory|RuntimeError/i.test(e.message)) {
+        // The WASM runtime is not usable after an abort or trap; the next open gets a new worker.
+        this.client?.terminate();
+        this.client = null;
+      }
       this.setStatus('error', this.errorMessage);
       this.notice(this.errorMessage, 'error');
       this.emit({ type: 'progress', progress: null });
@@ -1869,7 +1882,7 @@ export class App {
   drawnSectionsReport(): string {
     const sp = this.spatial;
     const table = this.table;
-    if (!sp || !table) return 'No dataset loaded.';
+    if (!sp || !table) return `No dataset loaded. ${versionLine()}; ${navigator.userAgent}`;
     const viewer = this.viewer;
     const gl = viewer.renderer.getContext();
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
@@ -1978,8 +1991,9 @@ export class App {
     viewer.render();
     const after = this.displacementReport(width, height);
     const flags = new URLSearchParams(location.search).get('gl') || 'none';
+    const errs = recentErrors();
     return [
-      `SPV diagnostic ${new Date().toISOString()}`,
+      `SPV diagnostic ${new Date().toISOString()}; ${versionLine()}; ${navigator.userAgent}`,
       `Renderer ${renderer}; DPR ${window.devicePixelRatio}; canvas ${width}×${height} CSS px; context: ${attrText}; gl flags: ${flags}; loaded ${this.loadInfo?.loadMode ?? 'n/a'}; layout ${this.store.slice('layout').mode}`,
       `Frame: ${stats.calls} draw calls, ${stats.points.toLocaleString()} point vertices, ${stats.lines} line segments, ${stats.triangles} triangles`,
       `Drawn: ${off ? tally(off.ids) : 'n/a'} [offscreen census]`,
@@ -1989,6 +2003,12 @@ export class App {
       zCheck.length ? `Buffer check — ${zCheck.join('; ')}` : '',
       `Displaced cells ${before}`,
       `After re-uploading all vertex attributes: displaced cells ${after}`,
+      errs.length
+        ? `Recent errors (${errs.length}): ${errs
+            .slice(-5)
+            .map((x) => `${x.at} [${x.source}] ${x.message}`)
+            .join(' | ')}`
+        : '',
     ]
       .filter(Boolean)
       .join('\n');

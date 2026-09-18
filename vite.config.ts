@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +9,30 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(ROOT, 'data');
 const FIXTURES_DIR = path.join(ROOT, 'tests', 'fixtures');
 const BASE = process.env.VITE_BASE ?? '/';
+const PKG = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+  version: string;
+};
+
+/**
+ * `<short sha>[+] <date>`: the commit the bundle was built from ("+" = uncommitted changes) and
+ * its commit date, so the same commit always yields the same stamp; the UTC build date is the
+ * fallback when git is unavailable.
+ */
+function buildStamp(): string {
+  const git = (args: string): string => {
+    try {
+      return execSync(`git ${args}`, { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+        .toString()
+        .trim();
+    } catch {
+      return '';
+    }
+  };
+  const sha = (process.env.GITHUB_SHA || git('rev-parse HEAD')).slice(0, 7) || 'unknown';
+  const dirty = !process.env.GITHUB_SHA && git('status --porcelain') !== '' ? '+' : '';
+  const date = git('show -s --format=%cs HEAD') || new Date().toISOString().slice(0, 10);
+  return `${sha}${dirty} ${date}`;
+}
 
 const MIME: Record<string, string> = {
   '.h5ad': 'application/octet-stream',
@@ -106,14 +131,37 @@ function serveDataDir(): Plugin {
   };
 }
 
+/**
+ * The Content Security Policy is a <meta> tag in index.html because GitHub Pages cannot send
+ * headers. The dev server injects CSS and its error overlay as inline <style> elements, so in
+ * `serve` mode that one directive is loosened; builds and `vite preview` keep the strict policy.
+ */
+function devCsp(): Plugin {
+  return {
+    name: 'spv-dev-csp',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      return html.replace("style-src-elem 'self';", "style-src-elem 'self' 'unsafe-inline';");
+    },
+  };
+}
+
 export default defineConfig({
   base: BASE,
-  plugins: [serveDataDir()],
+  plugins: [serveDataDir(), devCsp()],
+  define: {
+    __SPV_VERSION__: JSON.stringify(PKG.version),
+    __SPV_BUILD__: JSON.stringify(buildStamp()),
+  },
   assetsInclude: ['**/*.so'],
   build: {
     target: 'es2022',
     sourcemap: false,
     assetsInlineLimit: 0,
+    // The only chunk over the default 500 kB is the h5wasm worker (JS + embedded WASM, ~4.8 MB,
+    // ~1 MB gzipped): loaded lazily, in a worker, and not splittable. scripts/bundle_budget.mjs
+    // enforces per-file budgets instead.
+    chunkSizeWarningLimit: 5000,
   },
   worker: {
     format: 'es',

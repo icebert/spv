@@ -19,11 +19,16 @@ import { createSidebar } from './ui/sidebar';
 import { toast } from './ui/toast';
 import { createTooltip } from './ui/tooltip';
 import { createTopbar } from './ui/topbar';
+import { isBenignError, recentErrors, recordError, type ErrorEntry } from './util/errorLog';
+import { BUILD, VERSION, versionLine } from './version';
 
 interface Debug {
   app: App | null;
   ready: boolean;
   error: string | null;
+  version: string;
+  build: string;
+  errors(): readonly ErrorEntry[];
   info(): unknown;
 }
 
@@ -32,7 +37,10 @@ const root = document.getElementById('app')!;
 function webglAvailable(): boolean {
   try {
     const c = document.createElement('canvas');
-    return Boolean(c.getContext('webgl2'));
+    const gl = c.getContext('webgl2');
+    // Release the probe context: browsers allow only a handful of live WebGL contexts per page.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(gl);
   } catch {
     return false;
   }
@@ -46,12 +54,42 @@ function fatal(title: string, message: string): void {
       el('h1', null, 'SPV — Spatial Viewer'),
       el('h2', null, title),
       el('p', null, message),
+      el('p', 'spv-note', versionLine()),
     ),
   );
 }
 
+/**
+ * Last-resort reporting for errors nothing else caught: one toast per distinct message every
+ * 10 s (a failure inside the render loop must not flood the screen) and a record for the D report.
+ */
+function installErrorHandlers(): void {
+  const lastShown = new Map<string, number>();
+  const report = (source: 'error' | 'unhandledrejection', err: unknown): void => {
+    if (isBenignError(err)) return;
+    const entry = recordError(source, err);
+    const now = Date.now();
+    if ((lastShown.get(entry.message) ?? -Infinity) > now - 10_000) return;
+    lastShown.set(entry.message, now);
+    toast(
+      `Something went wrong: ${entry.message}. If it keeps happening, press D to copy a diagnostic report and include it when asking for help.`,
+      'error',
+    );
+  };
+  window.addEventListener('error', (e) => report('error', e.error ?? e.message));
+  window.addEventListener('unhandledrejection', (e) => report('unhandledrejection', e.reason));
+}
+
 function main(): void {
-  const dbg: Debug = { app: null, ready: false, error: null, info: () => null };
+  const dbg: Debug = {
+    app: null,
+    ready: false,
+    error: null,
+    version: VERSION,
+    build: BUILD,
+    errors: recentErrors,
+    info: () => null,
+  };
   (window as unknown as { __spv: Debug }).__spv = dbg;
   if (!webglAvailable()) {
     fatal(
@@ -307,4 +345,13 @@ function main(): void {
   })();
 }
 
-main();
+installErrorHandlers();
+try {
+  main();
+} catch (err) {
+  recordError('error', err);
+  fatal(
+    'SPV could not start',
+    `${err instanceof Error ? err.message : String(err)}. Reload the page; if it happens again, try a current version of Chrome, Firefox, Edge or Safari.`,
+  );
+}

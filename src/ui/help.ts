@@ -1,3 +1,4 @@
+import { versionLine } from '../version';
 import { el } from './dom';
 
 const SHORTCUTS: [string, string][] = [
@@ -13,7 +14,7 @@ const SHORTCUTS: [string, string][] = [
   ['L', 'Cycle layout mode'],
   ['O', 'Toggle orthographic camera'],
   ['X', 'Toggle lasso / box selection mode (Shift-drag for a box)'],
-  ['D', 'Diagnostic: which sections are actually drawn in the current view'],
+  ['D', 'Copy a diagnostic report: build, renderer, sections actually drawn, recent errors'],
   ['Esc', 'Clear selection / close dialogs'],
 ];
 
@@ -77,6 +78,7 @@ export function openHelp(): void {
         null,
         'Everything runs in your browser. Local files are read in place through the File API inside a Web Worker and are never uploaded anywhere. Remote files are fetched directly by your browser.',
       ),
+      el('p', 'spv-note', versionLine()),
       el(
         'div',
         'spv-row',

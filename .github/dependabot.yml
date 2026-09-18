@@ -1,0 +1,15 @@
+# Weekly dependency updates. package.json pins exact versions, so every bump arrives as a pull
+# request that runs the CI workflow (typecheck, lint, unit and end-to-end tests) before merging.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

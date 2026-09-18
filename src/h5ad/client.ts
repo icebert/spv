@@ -37,12 +37,15 @@ export class H5adClient {
   private readyPromise: Promise<void>;
   private readyResolve!: () => void;
   onLog: ((level: 'info' | 'warn' | 'error', message: string) => void) | null = null;
+  /** True once the worker raised an uncaught error; every later call rejects at once. */
+  dead = false;
 
   constructor(worker: Worker = createH5adWorker()) {
     this.worker = worker;
     this.readyPromise = new Promise((r) => (this.readyResolve = r));
     worker.onmessage = (e: MessageEvent<WorkerOutbound>) => this.handle(e.data);
     worker.onerror = (e) => {
+      this.dead = true;
       const err = new H5adClientError(`Worker error: ${e.message || 'unknown'}`, 'worker');
       for (const p of this.pending.values()) p.reject(err);
       this.pending.clear();
@@ -75,6 +78,15 @@ export class H5adClient {
   ): Promise<ReturnType<RpcMethods[M]>> {
     const id = this.nextId++;
     return new Promise<ReturnType<RpcMethods[M]>>((resolve, reject) => {
+      if (this.dead) {
+        reject(
+          new H5adClientError(
+            'The data worker stopped unexpectedly; open the file again.',
+            'worker',
+          ),
+        );
+        return;
+      }
       if (opts.signal?.aborted) {
         reject(new H5adClientError('cancelled', 'cancelled'));
         return;

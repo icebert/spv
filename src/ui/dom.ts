@@ -24,7 +24,6 @@ export function el<K extends keyof HTMLElementTagNameMap>(
         node.addEventListener(k.slice(2).toLowerCase(), v);
       } else if (k === 'className') node.className = String(v);
       else if (k === 'text') node.textContent = String(v);
-      else if (k === 'html') node.innerHTML = String(v);
       else if (v === true) node.setAttribute(k, '');
       else node.setAttribute(k, String(v));
     }

@@ -18,6 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "budget": "node scripts/bundle_budget.mjs",
     "inspect": "python3 scripts/inspect_h5ad.py data/demo.h5ad"
   },
   "dependencies": {

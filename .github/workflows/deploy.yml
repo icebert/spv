@@ -4,6 +4,7 @@
 #
 # The site is built with VITE_BASE=/<repo-name>/ so it works at https://<user>.github.io/<repo>/.
 # For a root site (repository named <user>.github.io) change VITE_BASE below to "/".
+# Pull requests and other branches run the same checks in ci.yml without deploying.
 name: Deploy to GitHub Pages
 
 on:
@@ -27,9 +28,11 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: lts/*
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
@@ -37,12 +40,21 @@ jobs:
         run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+      - name: Bundle budget
+        run: npm run budget
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
       - name: End-to-end tests (production build at the Pages sub-path)
         run: npm run e2e
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+      - name: Keep Playwright traces and screenshots when a test fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

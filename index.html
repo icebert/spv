@@ -2,8 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Delivered as a meta tag because GitHub Pages cannot set headers. connect-src is open
+         because #url= may name any CORS-enabled host; the h5wasm worker runs under its own
+         (same-origin) policy. vite.config.ts loosens style-src-elem for the dev server only. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; worker-src 'self'; connect-src *; img-src 'self' data:; font-src 'self'; style-src 'self' 'unsafe-inline'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#161616" />
+    <meta name="referrer" content="no-referrer" />
     <meta
       name="description"
       content="SPV — Spatial Viewer: a static, browser-based 3D viewer for spatial transcriptomics .h5ad files. Nothing is uploaded; files are read in your browser."
@@ -16,6 +25,16 @@
   </head>
   <body>
     <div id="app"></div>
+    <noscript>
+      <div class="spv-fatal">
+        <h1>SPV — Spatial Viewer</h1>
+        <h2>JavaScript is turned off</h2>
+        <p>
+          SPV reads and draws .h5ad files in your browser, which needs JavaScript. Enable it and
+          reload the page.
+        </p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

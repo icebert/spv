@@ -524,3 +524,82 @@ test.describe('native 3-D synthetic dataset', () => {
     await shot(page, 'synthetic');
   });
 });
+
+test.describe('production hardening', () => {
+  test('the shipped page carries a Content Security Policy that loading, images and export satisfy', async ({
+    page,
+  }) => {
+    const violations: string[] = [];
+    page.on('console', (m) => {
+      if (/Content Security Policy|Refused to/.test(m.text())) violations.push(m.text());
+    });
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    const csp = await page
+      .locator('meta[http-equiv="Content-Security-Policy"]')
+      .getAttribute('content');
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("object-src 'none'");
+    // canvas → PNG download
+    const download = page.waitForEvent('download');
+    await page.keyboard.press('s');
+    expect((await download).suggestedFilename()).toMatch(/^spv-.*\.png$/);
+    // a second dataset with tissue images (worker reads + texture uploads)
+    await page.goto(fixtureUrl('visium2.h5ad'));
+    await page.reload();
+    await waitReady(page);
+    await page.evaluate(() => window.__spv.app.store.update('images', { enabled: true }));
+    await expect.poll(async () => (await info(page)).images.loaded).toBeGreaterThan(0);
+    expect(violations).toEqual([]);
+  });
+
+  test('reports its version and build in the debug object, the Help dialog and the D report', async ({
+    page,
+  }) => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+      version: string;
+    };
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    expect(await page.evaluate(() => window.__spv.version)).toBe(pkg.version);
+    expect(await page.evaluate(() => window.__spv.build)).toMatch(
+      /^([0-9a-f]{7}\+?|unknown) \d{4}-\d{2}-\d{2}$/,
+    );
+    await page.keyboard.press('?');
+    await expect(page.getByRole('dialog', { name: 'Help' })).toContainText(
+      `SPV ${pkg.version}, build `,
+    );
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Help' })).toHaveCount(0);
+    const report: string = await page.evaluate(() => window.__spv.app.drawnSectionsReport());
+    expect(report.split('\n')[0]).toContain(`SPV ${pkg.version}, build `);
+  });
+
+  test('an uncaught error and an unhandled rejection each show one toast and are kept for the report', async ({
+    page,
+  }) => {
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    await page.evaluate(() => {
+      setTimeout(() => {
+        throw new Error('synthetic failure for the test');
+      }, 0);
+      setTimeout(() => {
+        throw new Error('synthetic failure for the test');
+      }, 20);
+      void Promise.reject(new Error('synthetic rejection for the test'));
+    });
+    const failure = page.locator('.spv-toast.spv-error', { hasText: 'synthetic failure' });
+    const rejection = page.locator('.spv-toast.spv-error', { hasText: 'synthetic rejection' });
+    await expect(failure).toHaveCount(1);
+    await expect(rejection).toHaveCount(1);
+    await page.waitForTimeout(200);
+    await expect(failure).toHaveCount(1); // the repeat within 10 s is deduplicated
+    await expect(failure).toContainText('press D');
+    const messages = await page.evaluate(() => window.__spv.errors().map((e) => e.message));
+    expect(messages.filter((m) => m === 'synthetic failure for the test')).toHaveLength(2);
+    expect(messages).toContain('synthetic rejection for the test');
+    const report: string = await page.evaluate(() => window.__spv.app.drawnSectionsReport());
+    expect(report).toMatch(/Recent errors \(\d+\):.*synthetic rejection for the test/);
+  });
+});
