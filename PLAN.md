@@ -121,7 +121,7 @@ Would make gene switching an `indptr` slice instead of a full `indices` scan and
   damping settled (once from the controls' `change` event via `requestRender()`, once from the loop),
   so pending `requestAnimationFrame` callbacks doubled every frame. Fixed in `Viewer.frame` (only one
   pending frame). The earlier headless "30 fps orbit" number was this bug, not rendering cost.
-- **Numbers** are in README "Measured performance". Highlights: demo points visible 0.58 s after
+- **Numbers** are in `docs/internals.md`, "Measured performance" (moved out of the README when it was shortened on 2026-09-17). Highlights: demo points visible 0.58 s after
   navigation with 7.3 MB of 25 MB fetched; 103k/500k/2M points at 2.9/5.2/11 ms per frame; layout
   switches 2–9 ms of main-thread work; first CSR gene 0.95 s (index build), later genes ≤ 22 ms;
   4 × 2048² images decoded and uploaded 1.3 s after the first frame; dataset switching ×3 leaves GPU

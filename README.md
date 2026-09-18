@@ -1,267 +1,94 @@
 # SPV — Spatial Viewer
 
-SPV is a lightweight, static, browser-based 3D viewer for spatial transcriptomics data stored as
-AnnData `.h5ad` files. It opens one file at a time straight from a URL or from your disk, parses the
-HDF5 layout in a Web Worker with `h5wasm`, and renders every cell or spot as a GPU point sprite with
-Three.js. Multi-section datasets (Visium slides, Xenium or CosMx slides, serial MERFISH slices)
-become an explorable 3D stack: sections spread along z, optionally drawn on their tissue image,
-steppable one at a time, or tiled side by side. There is no backend, no upload, and no build-time
-data conversion: the site is plain files served by GitHub Pages.
+SPV shows spatial transcriptomics data as an interactive 3D point cloud in the browser. It opens
+one AnnData `.h5ad` file at a time, from a URL or from your disk, and draws every cell or spot
+coloured by metadata or by gene expression. Multi-section datasets (Visium, Xenium, CosMx, serial
+MERFISH slices) become a stack you can orbit, step through, tile, or view on the tissue image. The
+site is plain static files: no server, no upload, no conversion step.
 
-![SPV showing the demo dataset: 16 slices coloured by gene expression, with the Sections panel and a pinned tooltip](docs/screenshot.png)
+![The demo dataset: 16 slices coloured by gene expression, with the Sections panel and a pinned tooltip](docs/screenshot.png)
 
-![Tile layout: the 16 sections of the demo side by side](docs/screenshot-tile.png)
+## Use it
 
-**Live demo:** `https://<user>.github.io/<repo>/` (replace after deploying; see [Deploy in 5 minutes](#deploy-in-5-minutes)).
+Open the site (`https://<user>.github.io/<repo>/` once [deployed](#deploy)), then pick a dataset
+from the list, paste the URL of a CORS-enabled `.h5ad`, or drop a file from your disk onto the
+page. Files never leave your browser.
 
-## Features
+Links carry the whole view: `#dataset=<id>` opens a hosted dataset, `#url=<encoded-url>` any file
+on the web, and the **Share link** button adds layout, colours, filters and camera.
 
-- Opens `.h5ad` files from a curated manifest, any CORS-enabled URL, or a local file (file picker or drag and drop). Remote files on hosts that support HTTP range requests are read on demand, so only the bytes HDF5 touches are downloaded.
-- Squidpy conventions first: `obsm["spatial"]` / `obsm["spatial3d"]`, a `library_key` column matched against `uns["spatial"]`, tissue images with `scalefactors`, `uns/*_colors`, `obsp/*_connectivities`, `uns/moranI`. Generic AnnData files still work, and every coordinate source can be overridden.
-- Four section layouts applied in the vertex shader from a per-section transform table, so switching is instant and never re-uploads positions: **Stack** (native z or uniform spacing), **Stack normalized** (each section recentred), **Tile** (grid, top-down orthographic), **Single** (one section at a time). Spacing, tile gap, z-scale and z-explode sliders; a section stepper with play/pause; show/hide/solo per section.
-- Tissue image overlay per section, placed from `tissue_hires_scalef` / `tissue_lowres_scalef` exactly like `squidpy.pl.spatial_scatter`, with opacity, resolution choice, grayscale, a 256 MB texture budget and progressive loading after the first frame.
-- Colour by categorical `obs` (file palette or colour-blind-safe defaults; legend with counts, click or press Enter to toggle, shift-click to solo, search and virtualisation for large legends; a compact copy floats on the viewport while the sidebar is hidden), by numeric `obs`, or by gene expression from `X`, any layer or `raw.X`, with `log1p`, eight colormaps, percentile or explicit ranges and a colorbar. Colour changes are texture and uniform updates only.
-- Filters: Visium `in_tissue`, native-frame X/Y clip planes, z range, deterministic random subsampling, category visibility.
-- Hover tooltip and click-to-pin with GPU picking (no raycasting), showing the cell index, section, the value driving the colour and up to six chosen `obs` fields.
-- Perspective or orthographic camera, presets, turntable, PNG export at 1× or 2× with optional transparent background, and a compact versioned share link that restores the whole view.
-- Actionable errors for every failure path: WebGL missing, not HDF5, not AnnData, CORS blocked, missing compression plugin, shape mismatch, image decode failure.
-- Manual section alignment (per-section XY and z offset, rotation, flips in file units, stored in the share link and optionally in the manifest, and a per-section "shown at z" field for sections stored at a wrong z), a spatial graph overlay from `obsp/*_connectivities` that respects every point filter, the top spatially variable genes from `uns/moranI`, a Single-mode crossfade, two-gene blend colouring, lasso and box selection with CSV/TSV export (including the section column), and a histogram with draggable range handles.
+## What you can do
 
-## Supported `.h5ad` features and known limitations
+- **Layouts.** Stack sections along z (real z or uniform spacing), recentre each section, tile them side by side, or step through them one at a time with play/pause. Show, hide or solo any section; adjust spacing, z-scale and explode.
+- **Colour.** By any categorical or numeric `obs` column, or by a gene from `X`, a layer or `raw.X`, with log1p, colormaps, percentile or explicit ranges, a histogram with draggable handles, and two-gene blends. Click a legend entry to hide it, shift-click to solo it.
+- **Tissue images.** Per-section overlays placed like `squidpy.pl.spatial_scatter`, with opacity, resolution and grayscale controls.
+- **Inspect.** Hover for a tooltip, click to pin it. Lasso or box-select cells and export them as CSV or TSV. Overlay the spatial neighbour graph. Pick genes from `uns/moranI`.
+- **Filter.** `in_tissue`, X/Y clip planes, z range, random subsampling.
+- **Align.** Nudge, rotate or flip a section, or type the z it should be drawn at. Corrections travel in the share link or the dataset manifest.
+- **Export.** PNG screenshots at 1× or 2×, optionally transparent; a light theme on pure white for figures.
 
-Supported:
+## Files it reads
 
-- anndata ≥ 0.8 encodings (`encoding-type` attributes) and legacy anndata < 0.8 files (`__categories`, `h5sparse_format`), including files written by current anndata 0.13 (`nullable-string-array` indexes).
-- `X`, `layers/*`, `raw/X` as dense, CSR or CSC, any numeric dtype (float64 is downcast to float32 for the GPU).
-- `obs`/`var` columns: numeric, string, boolean, categorical (with `-1` missing codes → "NA"), nullable integer/boolean, legacy categoricals. Unsupported columns are listed, never fatal.
-- Coordinates: `obsm/spatial3d`, `spatial_3d`, `X_spatial_3d`, `spatial`, `X_spatial`, any `obsm` key containing "spatial"/"xyz", plus `z`/`Z`/`z_coord`/`z_um`/`depth`/`Bregma` from `obs`. NaN/inf rows are dropped and reported.
-- Sections from a `library_key` column matched to `uns/spatial`, from the usual column names (`library_id`, `sample`, `section`, `slice`, `slide`, `fov`, …), or inferred from a discrete z.
-- Images as `uint8`, `uint16` or float in [0, 1], RGB or RGBA or grayscale, `hires` and `lowres`.
-- Compression: gzip and shuffle built in; lzf, zstd, blosc, blosc2, lz4, bz2, bshuf, zfp, jpeg, bitgroom and bitround through lazily loaded `h5wasm-plugins`.
+AnnData 0.8 and later plus legacy files; `X`, layers and `raw.X` as dense, CSR or CSC; numeric,
+string, boolean, categorical and nullable `obs` columns; coordinates from `obsm/spatial3d`,
+`obsm/spatial`, `X_spatial` and similar keys, with z from `obs` when present; sections from a
+`library_key` column, common column names, or a discrete z; images as uint8, uint16 or float; gzip
+and shuffle built in, other filters (lzf, zstd, blosc, lz4, bz2, …) loaded on demand. Any
+coordinate or section choice can be overridden in the Coordinates panel.
 
-Limitations:
+Limits worth knowing: files hosted on GitHub Pages must stay under 100 MB; a CSR matrix needs one
+pass over its index before the first gene appears (convert large files to CSC); alignment is
+manual; WebGL 2 is required.
 
-- Alignment is manual (numeric inputs and nudge buttons); there is no automatic registration.
-- Selection works on the visible points only (hidden sections, categories and clipped points are never selected) and is not stored in the share link.
-- CSR `X` needs one full pass over the index array before the first gene can be coloured. Below 25 M non-zeros SPV builds an in-memory column index (8 bytes per non-zero) so later genes are instant; above that each gene is scanned in chunks. Convert to CSC with `prepare_h5ad.py --csc` for large matrices.
-- The whole file is downloaded when the host does not support byte ranges or serves it gzip-encoded.
-- A single WebGL context: GPU memory for images is capped at 256 MB and images are downscaled to 2048 px (1024 px above 8 sections).
-- `obs` columns with more than 65,535 categories cannot be used for colouring (they still work in tooltips).
-
-## The demo dataset
-
-`data/demo.h5ad` (24 MB) is a 16-slice mouse brain dataset with 103,085 cells and 434 genes. It is a
-native 3-D file: `obsm/spatial` has three columns and each `obs/slice` category sits on one z level
-(320–618, non-uniform spacing), `X` is CSR float64 with log-normalised values, and `uns` is empty
-(no tissue images, no stored colours). SPV therefore stacks the slices at their real z, offers
-"Uniform spacing" to space them evenly instead, generates palettes for the five categorical columns,
-and builds the CSR column index on the first gene. Slices are drawn at exactly the z stored in the
-file (spacing varies: 20, 15, 25, 18, 20, …). If a slice is known to be stored at the wrong z, type its
-correct z in Sections › Align current section › "Shown at z"; the offset is kept in the share link and can
-be made the default for a hosted dataset through the manifest's `section_alignment`. Everything about
-the file that needed a special case is listed in [`PLAN.md`](PLAN.md).
-
-## Adding a hosted dataset
-
-Datasets are listed in `data/datasets.json`. Generate the entry from the file itself so no field is
-guessed:
-
-```sh
-python scripts/inspect_h5ad.py data/mydata.h5ad          # writes data/mydata.meta.json
-python scripts/make_manifest.py data/*.meta.json          # rewrites data/datasets.json
-```
-
-Manifest schema (only `id`, `name`, `url` are required; the rest are hints the reader does not depend on). `section_alignment` holds per-section manual corrections in file units and degrees (`dx`, `dy`, `dz`, `rot`, `fx`, `fy`, keyed by section name) that the viewer applies by default; `make_manifest.py` preserves it when regenerating the manifest:
-
-```json
-{
-  "datasets": [
-    {
-      "id": "demo",
-      "name": "demo",
-      "description": "103,085 cells × 434 genes; 16 sections from obs/slice; …",
-      "url": "data/demo.h5ad",
-      "size_bytes": 25193286,
-      "spatial_key": "obsm/spatial",
-      "library_key": "obs/slice",
-      "default_color_by": { "type": "obs", "key": "seurat_clusters" },
-      "default_tooltip_fields": ["slice", "seurat_clusters"],
-      "example_genes": ["Itpr1", "Cacnb4", "Gria2"],
-      "section_alignment": { "slice3": { "dz": 0 } }
-    }
-  ]
-}
-```
-
-Size limits: GitHub rejects files over 100 MB, and Git LFS objects are not served by Pages. Keep
-hosted files under 100 MB (see below) or host large files elsewhere and use an absolute `url`. The
-host must allow cross-origin requests; byte-range support makes loading lazy. What was verified:
-
-| Host | CORS | Range requests | Notes |
-|---|---|---|---|
-| GitHub Pages (same origin) | n/a | yes (`Accept-Ranges: bytes`) | files ≤ 100 MB in the repo |
-| Cloud buckets (S3, GCS, R2, …) | configure on the bucket | yes | verified `Accept-Ranges: bytes` on a public GCS object; add a CORS rule allowing `GET, HEAD` from your Pages origin |
-| Zenodo | yes (`Access-Control-Allow-Origin: *`) | not observed | works, but the whole file is downloaded |
-| GitHub Release assets | check | check | run the check below before relying on it |
-
-Check any URL with:
-
-```sh
-curl -sI -H "Origin: https://<user>.github.io" -r 0-7 "https://host/path/file.h5ad" | grep -i -E "HTTP/|access-control-allow-origin|accept-ranges|content-range"
-```
-
-You want `HTTP 206`, an `Access-Control-Allow-Origin` header and `Accept-Ranges: bytes`.
-
-How the lazy loader requests bytes, and why it matters for Safari: the file is read in 1 MiB
-chunks, and every chunk is requested under its own URL (`file.h5ad?spv_range=<from>-<to>`; static
-hosts ignore the query string). Safari's HTTP cache is keyed by URL and ignores the `Range` header,
-so without this a cached partial response for one range can be handed back for another range of the
-same URL, and HDF5 would silently read another part of the file (cells drawn with other cells'
-coordinates, sections at the wrong z). Every response is also verified against its `Content-Range`
-and length; a wrong or truncated response is retried once with a cache-busting parameter and then
-reported as an error instead of being used, and a server that ignores `Range` and returns the whole
-file with `200` is handled by slicing locally. Two consequences for hosting:
-
-- URLs that already carry a query string (signed S3/GCS/Azure URLs) are never altered, so the
-  per-chunk key is not added. Serve such files with `Cache-Control: no-store` if Safari users matter.
-- Cross-origin hosts should expose the range header (`Access-Control-Expose-Headers: Content-Range`);
-  otherwise only the response length can be checked.
-
-## Preparing a large dataset
-
-`scripts/prepare_h5ad.py` shrinks and converts files without touching the original:
-
-```sh
-# recommended recipe for a Pages-hosted file (< 100 MB, fast gene switching)
-python scripts/prepare_h5ad.py in.h5ad out.h5ad --csc --float32 --compression gzip --level 4 \
-    --drop raw,varm,varp --n-top-genes 2000 --downscale-images 2000
-
-# make 2-D multi-section stacking explicit
-python scripts/prepare_h5ad.py in.h5ad out.h5ad --library-key library_id --z-spacing 500
-```
-
-Options: `--max-cells N [--stratify col]`, `--genes FILE|list`, `--n-top-genes N [--rank variance|moranI]`,
-`--layer NAME`, `--drop raw,layers,obsp,varm,varp,uns` (`uns` keeps `spatial`, `*_colors`,
-`spatial_neighbors`, `moranI`), `--downscale-images PX` (rescales `tissue_hires_scalef` consistently),
-`--drop-images`, `--drop-graph`, `--csc`, `--float32`, `--spatial-key KEY`, `--library-key COL --z-spacing F`,
-`--compression gzip|lzf|none --level L`. It prints before/after size, nnz, image bytes and a rough
-browser memory estimate. For the demo file the recommended command is
-`prepare_h5ad.py data/demo.h5ad demo_csc.h5ad --csc --float32` (CSC makes each gene an `indptr` slice);
-the file in this repository is left exactly as provided.
-
-Python environment: `uv venv .venv --python 3.12 && uv pip install --python .venv/bin/python --only-binary :all: -r scripts/requirements.txt`.
-
-## Deploy in 5 minutes
+## Deploy
 
 1. Fork or clone this repository and push it to GitHub.
-2. In the repository settings open **Pages** and set **Source** to **GitHub Actions**.
-3. Push to `main`. The workflow in `.github/workflows/deploy.yml` runs typecheck, lint, unit tests, builds with `VITE_BASE=/<repo>/`, runs the Playwright end-to-end suite against the built site at that sub-path, and deploys.
-4. Open `https://<user>.github.io/<repo>/`. `#dataset=<id>` deep-links a manifest entry, `#url=<encoded-url>` any CORS-enabled file.
+2. In the repository settings, open **Pages** and set **Source** to **GitHub Actions**.
+3. Push to `main`. The workflow checks, builds and deploys the site.
+4. Open `https://<user>.github.io/<repo>/`.
 
-For a root site (repository named `<user>.github.io`) change `VITE_BASE` in the workflow to `/`. Locally, `npm run dev` serves at `/`, and `VITE_BASE=/spv/ npm run build && VITE_BASE=/spv/ npm run preview` reproduces the sub-path deployment.
+To add datasets, shrink large files, host them elsewhere, or run on your own server, see
+[docs/hosting.md](docs/hosting.md).
 
-Pull requests and pushes to other branches run the same gates in `.github/workflows/ci.yml` without deploying: `npm audit` on the runtime dependencies, typecheck, lint, unit tests, a production build, the bundle budget (`scripts/bundle_budget.mjs`, per-file size limits for `dist/assets/`) and the end-to-end suite; Playwright traces are kept as an artifact when a test fails. Dependabot opens weekly update pull requests for npm packages and the actions. Node is pinned by `.nvmrc`.
-
-## Hosting notes
-
-- **Browser support.** Current Chrome, Edge, Firefox and Safari with WebGL 2. Without WebGL 2, or with JavaScript off, the page says so and what to do; if the app fails while starting, the same page shows the error and the build stamp.
-- **Content Security Policy.** `index.html` carries a `<meta http-equiv="Content-Security-Policy">` (GitHub Pages cannot send headers): scripts, workers, styles and fonts only from the site itself, no plugins or embedded objects, no inline scripts. `connect-src` stays open because `#url=` may point at any CORS-enabled host. The dev server loosens one directive (`style-src-elem`) because Vite injects CSS as inline `<style>` elements; builds and `vite preview` use the strict policy, and the end-to-end suite fails on any violation. Nothing is loaded from third parties: the typeface, the WASM engine and the compression plugins ship with the site, and the page sends no `Referer` header.
-- **Self-hosting.** Any static file server works. Serve `assets/` with `Cache-Control: public, max-age=31536000, immutable` (file names carry content hashes) and `index.html` plus `data/` with a short max-age. `.h5ad` files need `Accept-Ranges: bytes`; add CORS (`GET, HEAD`, exposing `Content-Range`, `Content-Length` and `Accept-Ranges`) when they live on another origin. Sending the same policy as a `Content-Security-Policy` header, plus `X-Content-Type-Options: nosniff`, is a good idea where headers are available.
-- **Versions and support.** `package.json` holds the version; the Help dialog and `window.__spv.version` show it, and every build carries a stamp (short commit hash, `+` when built from uncommitted changes, and the commit date). Uncaught errors and unhandled promise rejections show one toast per distinct message every ten seconds and are kept in a short log; the `D` report starts with version, build and browser and ends with the last errors, so a pasted report is enough to reproduce a problem. If the data worker crashes (WASM abort, out of memory), the next file open starts a fresh worker. `CHANGELOG.md` records what changed between versions.
-
-## Development
+## Develop
 
 ```sh
 npm ci
-npm run dev          # Vite dev server with data/ served at /data/ (Range-capable)
-npm run typecheck    # three tsconfigs: app (DOM), worker (WebWorker), node (tests/config)
-npm run lint         # eslint + prettier --check
-npm run check        # typecheck + lint + unit tests (the pre-push gate)
-npm test             # vitest: reader against every fixture, colormaps, palettes, layouts, URL state
-npm run e2e          # playwright: builds to dist-e2e/ and serves it at http://localhost:4174/spv/ (never touches dist/ or a running preview)
+npm run dev      # http://localhost:5173/ with data/ served with range requests
+npm run check    # typecheck, lint, unit tests
+npm run e2e      # Playwright against a production build
 npm run build && npm run preview
-npm run budget       # per-file size budgets for dist/assets (also run in CI)
-python scripts/make_fixtures.py        # regenerate tests/fixtures (committed)
-python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synthetic files (gitignored)
 ```
 
-If a browser draws the view wrongly, press `D` and paste the report (it is copied to the
-clipboard and printed to the console). It starts with the version, build stamp and browser and
-ends with the last errors the page saw. The WebGL context can be created differently from the page
-URL, before the `#`: `?gl=noaa` (no antialiasing), `?gl=opaque` (no alpha channel),
-`?gl=preserve` (preserveDrawingBuffer), or a comma-separated combination.
+Pull requests run the same checks in CI. How the viewer works, what was measured, and how to
+diagnose drawing problems: [docs/internals.md](docs/internals.md). Decisions and history:
+[PLAN.md](PLAN.md), [CHANGELOG.md](CHANGELOG.md).
 
 ## Keyboard shortcuts
 
 | Key | Action |
 |---|---|
 | `R` | Reset view |
-| `H` | Toggle sidebar (with it hidden, a compact clickable legend floats on the viewport) |
-| `F` | Toggle fullscreen |
+| `H` | Toggle sidebar |
+| `F` | Fullscreen |
 | `S` | Screenshot |
 | `1` / `2` / `3` / `4` | Top / front / side / isometric view |
 | `←` / `→` | Previous / next section |
-| `Space` | Play / pause section stepping |
+| `Space` | Play / pause |
 | `I` | Toggle tissue images |
-| `L` | Cycle layout mode |
+| `L` | Cycle layout |
 | `O` | Toggle orthographic camera |
-| `X` | Lasso / box selection mode (Shift-drag for a box) |
-| `D` | Copy a diagnostic report to the clipboard: version, build and browser; sections the GPU drew (pixel census, offscreen and on the canvas) and where, versus the CPU projection; draw calls per frame; granted context attributes; coordinate-buffer check; the last errors seen |
-| `Esc` | Clear the pinned cell / the selection / leave selection mode |
+| `X` | Selection mode (Shift-drag for a box) |
+| `D` | Copy a diagnostic report |
+| `Esc` | Clear the pin or selection, leave selection mode |
 | `?` | Help |
 
 ## Privacy
 
-Everything runs in your browser. Local files are mounted into the worker's virtual filesystem
-through the File API (`WORKERFS`), read in place and never uploaded anywhere. Remote files are
-fetched by your browser directly from the host you name. Share links for local files contain the
-view state only; the recipient has to open the same file.
-
-## Measured performance
-
-Measured on the production build served locally, Chromium 1243 (Playwright) with ANGLE Metal on an
-AMD Radeon Pro 5500 XT (a desktop discrete GPU, so frame times are better than on the spec's
-integrated-graphics laptop; the numbers are frame times including GPU completion, not vsync-capped
-frame rates). The synthetic files come from `scripts/make_synthetic_demo.py`.
-
-| Measurement | Result |
-|---|---|
-| `data/demo.h5ad` (103,085 cells, 16 sections, 24 MB): navigation → points visible | 0.58 s, of which HDF5 engine start 30 ms, open + summary 80 ms, coordinates + section model 55 ms |
-| Bytes fetched before the first frame (lazy range requests) | 7.3 MB of 25.2 MB; 21 MB after the first gene (CSR index needs all of `X`) |
-| Same file with a full download instead of range requests (local server) | open 87 ms + coordinates 27 ms after the 25 MB download |
-| Frame time while orbiting, 3 px points | 103k: 2.9 ms · 500k: 5.2 ms · 2M: 11.1 ms (≈ 340 / 190 / 90 fps capacity) |
-| Frame time, 2M points at 6 px | 19 ms (≈ 53 fps) |
-| Layout switch (stack ↔ tile ↔ single), spacing, explode, step, hide section | 2–4 ms of main-thread work at 103k–500k points, 9 ms at 2M; no position re-upload |
-| Colormap, range, category toggle, point size, opacity | < 1–3 ms (texture/uniform updates) |
-| Gene switch, CSR demo | first gene 0.95 s (builds the 71 MB in-memory column index in the worker), then 12–22 ms |
-| Gene switch, CSC (synthetic 500k × 50 / 2M × 8) | 60–85 ms / 220–350 ms |
-| GPU pick latency (hover) | 5–13 ms |
-| Tissue images: 4 sections × 2048 × 2048 hires (synthetic Visium-like) | all decoded + uploaded 1.3 s after the first frame (67 MB of textures); stepping sections in Single mode 2 ms per step |
-| Switching datasets 3× (demo ↔ 4-image file) | GPU geometries 2 → 2, textures 3 → 2, image bytes 0; WASM heap grows once (19 → 40 MB) and then stays flat |
-
-Initial JS payload: 174 kB gzipped (Three.js included). The worker chunk with the HDF5 engine
-(4.8 MB, WASM embedded in the JS) loads when the first dataset is opened.
-
-## Design notes
-
-- **Worker-only I/O.** `h5wasm` lives in one Web Worker with a small typed RPC (`open`, `getSummary`, `getSpatial`, `getObsColumn`, `getVarNames`, `getGeneVector`, `getImage`, `getGraphEdges`, …). Typed arrays are transferred, never copied. Requests run in order; long scans yield between chunks so progress and cancellation work. The HDF5 "throwing error handler" is always on because failed reads otherwise return garbage silently.
-- **Partial reads.** Open reads only structure, shapes, attributes, coordinates, var names and the obs column list. Columns, genes, images and graphs are read on demand. `uns` is never read wholesale.
-- **Remote files.** A HEAD plus a ranged GET of the first 8 bytes verifies the HDF5 signature and byte-range support before Emscripten's lazy file is created (its own failure path would abort the WASM runtime). Local files are mounted with `WORKERFS`, so nothing is copied into WASM memory.
-- **Texture-driven rendering.** One `THREE.Points`. Per-point attributes are uploaded once per dataset (positions, section ordinal, validity) and once per colour variable (scalar or code). Everything interactive is a small texture or uniform: a 256-texel colormap, a palette whose alpha channel is the category mask, and a per-section transform table (offset, alpha, rotation/flip, pivot) that implements all four layouts, section visibility, dimming and manual alignment. Native z is kept through a `uNativeZ` uniform, so native-3D stacks and uniform stacks share one shader path.
-- **Display frame.** Flips and the Y/Z swap are applied in the shader before the section transform; the same `toDisplay` function produces the section geometry, image-plane placement and clip bounds on the CPU, so images always follow their spots.
-- **Picking.** Point ids are rendered as colours into a 1×1 target through `camera.setViewOffset` and read back asynchronously; no raycasting.
-- **Selection.** Lasso/box selection re-runs the vertex-shader transform on the CPU (display frame, section table, alignment, explode, camera) for the visible points and tests them against the screen-space polygon, so it agrees with what is drawn; exports fetch cell ids from the worker in one pass.
-- **State.** One typed slice store drives both the GPU side and the panels; the URL hash is a compact, versioned serialisation of everything except transient UI, written with `replaceState` after a debounce.
-- **Visual design.** Colour belongs to the data: the chrome is neutral grey in both themes and shows state with ink weight and fill, never hue, so the point cloud, swatches, colorbars and tissue images are the only chromatic elements (warnings excepted). The light theme draws on pure white, so an exported screenshot drops straight into a figure. The typeface is Atkinson Hyperlegible Next, self-hosted from `@fontsource-variable` (no third-party requests, about 53 KB of woff2), chosen because gene symbols mix I, l and 1. Each row of the Sections list carries a tick at the section's drawn z; read down the list, the ticks form a staircase that shows the real spacing between sections, including alignment offsets and the effect of "Uniform spacing".
-- **Deviations from the original spec** (ESLint flat config, TypeScript 5.9 instead of 7, embedded WASM, fixture sizes) and everything the demo file changed about the design are recorded in `PLAN.md`.
-
-Points are drawn in batches of 65,536 (one `THREE.Points` each, sharing shaders and uniforms;
-ids stay global through a per-batch offset), and graph edges in batches of 32,768 (65,536
-vertices). This keeps every vertex buffer under 1 MiB, which
-works around a Safari/Metal bug seen on an AMD iMac: past the first 1 MiB of a position buffer
-the GPU read other rows' coordinates, so the tail of one section and every later section were
-drawn in the wrong place. The `D` report's "Displaced cells" line detects this class of problem.
+Everything runs in your browser. Local files are read in place and never uploaded; remote files
+are fetched by your browser directly from the host you name. The page loads nothing from third
+parties.
 
 ## License
 
-MIT, see [`LICENSE`](LICENSE).
+MIT, see [LICENSE](LICENSE).
