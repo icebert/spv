@@ -33,6 +33,13 @@ export interface ScreenshotOptions {
   transparent?: boolean;
 }
 
+/** WebGL context attributes; overridable from the page URL (`?gl=noaa,opaque,preserve`) for diagnosis. */
+export interface ViewerGlOptions {
+  antialias?: boolean;
+  alpha?: boolean;
+  preserveDrawingBuffer?: boolean;
+}
+
 export class Viewer {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
@@ -58,15 +65,16 @@ export class Viewer {
   onContextLost: (() => void) | null = null;
   onContextRestored: (() => void) | null = null;
   onBeforeRender: (() => void) | null = null;
+  readonly glOptions: Required<ViewerGlOptions>;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, gl: ViewerGlOptions = {}) {
     this.container = container;
-    this.renderer = new WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance',
-      preserveDrawingBuffer: false,
-    });
+    this.glOptions = {
+      antialias: gl.antialias ?? true,
+      alpha: gl.alpha ?? true,
+      preserveDrawingBuffer: gl.preserveDrawingBuffer ?? false,
+    };
+    this.renderer = new WebGLRenderer({ ...this.glOptions, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.autoClear = true;
     const canvas = this.renderer.domElement;
@@ -254,6 +262,40 @@ export class Viewer {
   census(): Map<number, number> {
     if (!this.pointCloud) return new Map();
     return this.picker.census(this.pointCloud, this.rig.camera);
+  }
+
+  /**
+   * Diagnostic: point id under every pixel, from an offscreen render or from the canvas itself.
+   * The real frame is redrawn right away so the id image is never presented.
+   */
+  censusIds(
+    mode: 'offscreen' | 'screen',
+  ): { width: number; height: number; ids: Int32Array } | null {
+    if (!this.pointCloud) return null;
+    try {
+      return this.picker.censusIds(this.pointCloud, this.rig.camera, mode);
+    } finally {
+      if (mode === 'screen') this.render();
+    }
+  }
+
+  /** Diagnostic: draw-call and primitive counts of one freshly rendered frame (all passes). */
+  frameStats(): { calls: number; points: number; lines: number; triangles: number } {
+    const info = this.renderer.info;
+    info.autoReset = false;
+    info.reset();
+    try {
+      this.render();
+      const i = info.render;
+      return { calls: i.calls, points: i.points, lines: i.lines, triangles: i.triangles };
+    } finally {
+      info.autoReset = true;
+    }
+  }
+
+  /** The attributes the browser actually granted (may differ from what was requested). */
+  contextAttributes(): WebGLContextAttributes | null {
+    return this.renderer.getContext().getContextAttributes();
   }
 
   /** Point index under the cursor (CSS px relative to the canvas), or -1. */

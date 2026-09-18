@@ -100,41 +100,69 @@ export class GpuPicker {
   }
 
   /**
-   * Diagnostic: render the points with the id material into an offscreen buffer and return how
-   * many pixels each point id covered, so we can tell which sections the GPU actually drew.
+   * Diagnostic: render the points with the id material and return the point id under every pixel
+   * (-1 = background). `'offscreen'` draws into a plain render target; `'screen'` draws into the
+   * canvas itself (antialiasing, alpha and size exactly as the user sees them), so the two can be
+   * compared when the on-screen picture looks wrong. After a `'screen'` census the caller must
+   * redraw the real frame.
    */
-  census(points: PointCloud, camera: Camera, width = 320, height = 200): Map<number, number> {
+  censusIds(
+    points: PointCloud,
+    camera: Camera,
+    mode: 'offscreen' | 'screen',
+    width = 320,
+    height = 200,
+  ): { width: number; height: number; ids: Int32Array } {
     const r = this.renderer;
-    const target = new WebGLRenderTarget(width, height, {
-      minFilter: NearestFilter,
-      magFilter: NearestFilter,
-      format: RGBAFormat,
-      type: UnsignedByteType,
-      depthBuffer: true,
-      stencilBuffer: false,
-    });
+    const gl = r.getContext() as WebGL2RenderingContext;
+    const target =
+      mode === 'offscreen'
+        ? new WebGLRenderTarget(width, height, {
+            minFilter: NearestFilter,
+            magFilter: NearestFilter,
+            format: RGBAFormat,
+            type: UnsignedByteType,
+            depthBuffer: true,
+            stencilBuffer: false,
+          })
+        : null;
     const prevMaterial = points.object.material;
     const prevTarget = r.getRenderTarget();
     const prevAlpha = r.getClearAlpha();
     r.getClearColor(this.clearColor);
-    const counts = new Map<number, number>();
     try {
       points.object.material = points.pickMaterial;
       r.setRenderTarget(target);
       r.setClearColor(0x000000, 0);
       r.clear();
       r.render(points.object, camera);
-      const buf = new Uint8Array(width * height * 4);
-      r.readRenderTargetPixels(target, 0, 0, width, height, buf);
-      for (let i = 0; i < buf.length; i += 4) {
-        const id = (buf[i] | (buf[i + 1] << 8) | (buf[i + 2] << 16)) - 1;
-        if (id >= 0) counts.set(id, (counts.get(id) ?? 0) + 1);
-      }
+      const w = target ? width : gl.drawingBufferWidth;
+      const h = target ? height : gl.drawingBufferHeight;
+      const buf = new Uint8Array(w * h * 4);
+      // A pending async pick may have left its pixel-pack buffer bound, which would make this
+      // readPixels fail; the pick rebinds its own buffer before reading it back.
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+      if (target) r.readRenderTargetPixels(target, 0, 0, w, h, buf);
+      else gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+      const ids = new Int32Array(w * h);
+      for (let i = 0, p = 0; i < ids.length; i++, p += 4)
+        ids[i] = (buf[p] | (buf[p + 1] << 8) | (buf[p + 2] << 16)) - 1;
+      return { width: w, height: h, ids };
     } finally {
       points.object.material = prevMaterial;
       r.setRenderTarget(prevTarget);
       r.setClearColor(this.clearColor, prevAlpha);
-      target.dispose();
+      target?.dispose();
+    }
+  }
+
+  /** Pixels per point id in an offscreen render of the current view. */
+  census(points: PointCloud, camera: Camera, width = 320, height = 200): Map<number, number> {
+    const { ids } = this.censusIds(points, camera, 'offscreen', width, height);
+    const counts = new Map<number, number>();
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (id >= 0) counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return counts;
   }

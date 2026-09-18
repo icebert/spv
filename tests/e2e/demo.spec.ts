@@ -163,9 +163,21 @@ test.describe('demo dataset', () => {
     await page.evaluate(() => window.__spv.app.viewer.render());
     const report: string = await page.evaluate(() => window.__spv.app.drawnSectionsReport());
     expect(report).toContain('Drawn: slice13');
+    expect(report).toContain('Drawn on screen: slice13');
     expect(report).toContain('slice13: 5,412 cells all at z 558');
     expect(report).not.toContain('corrupt');
     expect(report).toContain('loaded lazy');
+    // one Points draw + the axes gizmo; every vertex submitted exactly once
+    expect(report).toMatch(/Frame: 2 draw calls, 103,085 point vertices/);
+    // what the canvas shows sits where the CPU projects the visible cells (point radius margin)
+    const box = (re: RegExp) => {
+      const m = re.exec(report);
+      expect(m, `${re} in ${report}`).not.toBeNull();
+      return m!.slice(1, 5).map(Number);
+    };
+    const gpu = box(/Drawn on screen: .*footprint x (\d+)–(\d+), y (\d+)–(\d+)/);
+    const cpu = box(/Expected footprint .*: x (\d+)–(\d+), y (\d+)–(\d+)/);
+    for (let k = 0; k < 4; k++) expect(Math.abs(gpu[k] - cpu[k])).toBeLessThanOrEqual(12);
   });
 
   test('share link restores layout, colour and camera', async ({ page, context }) => {

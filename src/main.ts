@@ -59,7 +59,16 @@ function main(): void {
   }
   const base = import.meta.env.BASE_URL;
   const viewport = el('div', 'spv-viewport');
-  const app = new App(viewport, base);
+  // Page-URL (not hash) flags to create the WebGL context differently when a browser misdraws:
+  // ?gl=noaa (no antialiasing), ?gl=opaque (no alpha), ?gl=preserve (preserveDrawingBuffer).
+  const glFlags = new Set(
+    (new URLSearchParams(location.search).get('gl') ?? '').split(',').filter(Boolean),
+  );
+  const app = new App(viewport, base, {
+    antialias: !glFlags.has('noaa'),
+    alpha: !glFlags.has('opaque'),
+    preserveDrawingBuffer: glFlags.has('preserve'),
+  });
   dbg.app = app;
   dbg.info = () => ({
     status: app.status,
@@ -253,7 +262,22 @@ function main(): void {
       case 'D': {
         const report = app.drawnSectionsReport();
         console.info(report);
-        toast(report, 'info', 20000);
+        const lines = report.split('\n');
+        const brief = lines.slice(3, 5).join(' · ');
+        const show = () => toast(report.replace(/\n/g, ' | '), 'info', 30000);
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard
+            .writeText(report)
+            .then(
+              () =>
+                toast(
+                  `Diagnostic copied to the clipboard (${lines.length} lines). ${brief}`,
+                  'info',
+                  20000,
+                ),
+              show,
+            );
+        } else show();
         break;
       }
       case '?':

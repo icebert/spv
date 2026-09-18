@@ -174,6 +174,11 @@ python scripts/make_fixtures.py        # regenerate tests/fixtures (committed)
 python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synthetic files (gitignored)
 ```
 
+If a browser draws the view wrongly, press `D` and paste the report (it is copied to the
+clipboard and printed to the console). The WebGL context can be created differently from the page
+URL, before the `#`: `?gl=noaa` (no antialiasing), `?gl=opaque` (no alpha channel),
+`?gl=preserve` (preserveDrawingBuffer), or a comma-separated combination.
+
 ## Keyboard shortcuts
 
 | Key | Action |
@@ -189,7 +194,7 @@ python scripts/make_synthetic_demo.py  # optional native-3D and Visium-like synt
 | `L` | Cycle layout mode |
 | `O` | Toggle orthographic camera |
 | `X` | Lasso / box selection mode (Shift-drag for a box) |
-| `D` | Diagnostic toast: sections the GPU actually drew (pixel census), section table, coordinate-buffer check, renderer, load mode |
+| `D` | Copy a diagnostic report to the clipboard: sections the GPU drew (pixel census, offscreen and on the canvas) and where, versus the CPU projection; draw calls per frame; granted context attributes; coordinate-buffer check |
 | `Esc` | Clear the pinned cell / the selection / leave selection mode |
 | `?` | Help |
 

@@ -21,7 +21,7 @@ import type {
 import { EdgeCloud } from './render/edges';
 import { ImagePlanes, IMAGE_TEXTURE_BUDGET } from './render/imagePlanes';
 import { PointCloud } from './render/points';
-import { Viewer } from './render/scene';
+import { Viewer, type ViewerGlOptions } from './render/scene';
 import {
   DEFAULT_LAYOUT,
   SectionTable,
@@ -227,9 +227,9 @@ export class App {
   private fadeToken = 0;
   private moranPromise: Promise<MoranI | null> | null = null;
 
-  constructor(viewport: HTMLElement, base: string) {
+  constructor(viewport: HTMLElement, base: string, gl: ViewerGlOptions = {}) {
     this.base = base;
-    this.viewer = new Viewer(viewport);
+    this.viewer = new Viewer(viewport, gl);
     this.viewer.onContextLost = () =>
       this.notice(
         'The WebGL context was lost. The view recovers when the browser restores it; reload if it does not.',
@@ -1860,25 +1860,88 @@ export class App {
   }
 
   /** Diagnostic (key D): which sections the GPU rasterised for the current view vs. what the table says. */
+  /**
+   * Diagnostic report (D key). Every line answers a different question: what the GPU actually
+   * drew (pixel census, offscreen and on the real canvas), where it drew it versus where the CPU
+   * projects the visible cells, how many draw calls and vertices a frame takes, which context
+   * attributes the browser granted, and whether the coordinate buffer matches the file.
+   */
   drawnSectionsReport(): string {
     const sp = this.spatial;
     const table = this.table;
     if (!sp || !table) return 'No dataset loaded.';
-    const counts = this.viewer.census();
-    const perSection = new Map<string, number>();
-    let noSection = 0;
-    for (const [id, px] of counts) {
-      const ord = sp.sectionOf ? sp.sectionOf[id] : 0xffff;
-      if (ord === 0xffff) noSection += px;
-      else {
-        const name = sp.sections[ord]?.name ?? `ordinal ${ord}`;
-        perSection.set(name, (perSection.get(name) ?? 0) + px);
+    const viewer = this.viewer;
+    const gl = viewer.renderer.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = ext
+      ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))
+      : String(gl.getParameter(gl.RENDERER));
+    const attrs = viewer.contextAttributes();
+    const attrText = attrs
+      ? `antialias ${attrs.antialias}, alpha ${attrs.alpha}, preserveDrawingBuffer ${attrs.preserveDrawingBuffer}`
+      : 'unknown';
+    const stats = viewer.frameStats();
+    const sectionName = (ord: number) =>
+      ord === 0xffff ? 'no section' : (sp.sections[ord]?.name ?? `ordinal ${ord}`);
+    const tally = (ids: Int32Array): string => {
+      const per = new Map<number, number>();
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i];
+        if (id < 0) continue;
+        const ord = sp.sectionOf ? sp.sectionOf[id] : 0xffff;
+        per.set(ord, (per.get(ord) ?? 0) + 1);
       }
+      return (
+        [...per.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([ord, px]) => `${sectionName(ord)} (${px.toLocaleString()} px)`)
+          .join(', ') || 'nothing'
+      );
+    };
+    const off = viewer.censusIds('offscreen');
+    const scr = viewer.censusIds('screen');
+    // Footprint of everything drawn on the canvas, in CSS px (readPixels rows run bottom-up).
+    let drawnBox = 'none';
+    if (scr) {
+      const dpr = viewer.renderer.getPixelRatio();
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let i = 0; i < scr.ids.length; i++) {
+        if (scr.ids[i] < 0) continue;
+        const col = i % scr.width;
+        const row = (i - col) / scr.width;
+        if (col < x0) x0 = col;
+        if (col > x1) x1 = col;
+        if (row < y0) y0 = row;
+        if (row > y1) y1 = row;
+      }
+      if (x1 >= 0)
+        drawnBox = `x ${Math.round(x0 / dpr)}–${Math.round(x1 / dpr)}, y ${Math.round((scr.height - 1 - y1) / dpr)}–${Math.round((scr.height - 1 - y0) / dpr)}`;
     }
+    // The same footprint from the CPU: the projection the lasso selection uses, limited to the canvas.
+    const pts = this.projectPoints();
+    const { width, height } = viewer.getSize();
+    let nVis = 0;
+    let cx0 = Infinity;
+    let cy0 = Infinity;
+    let cx1 = -Infinity;
+    let cy1 = -Infinity;
+    for (let i = 0; i < sp.n; i++) {
+      const x = pts[i * 2];
+      const y = pts[i * 2 + 1];
+      if (Number.isNaN(x) || x < 0 || y < 0 || x > width || y > height) continue;
+      nVis++;
+      if (x < cx0) cx0 = x;
+      if (x > cx1) cx1 = x;
+      if (y < cy0) cy0 = y;
+      if (y > cy1) cy1 = y;
+    }
+    const cpuBox = nVis
+      ? `x ${Math.round(cx0)}–${Math.round(cx1)}, y ${Math.round(cy0)}–${Math.round(cy1)}`
+      : 'none';
     const expected = table.geoms.filter((_g, i) => table.data[i * 4 + 3] > 0).map((g) => g.name);
-    const drawn = [...perSection.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([n, px]) => `${n} (${px.toLocaleString()} px)`);
     // Buffer integrity: every cell of a visible single-z section must sit at that section's file
     // z. A split (e.g. 2,630 of 5,412 cells at another z) means the coordinate array was read
     // from the wrong bytes, not that the data has two slices.
@@ -1889,30 +1952,37 @@ export class App {
         const sec = sp.sections[ord];
         if (!(table.data[ord * 4 + 3] > 0) || sec.z === null || sec.z === undefined) continue;
         let total = 0;
-        let off = 0;
+        let offCount = 0;
         let example = NaN;
         for (let i = 0; i < sp.n; i++) {
           if (sp.sectionOf[i] !== ord || !sp.valid[i]) continue;
           total++;
           const z = sp.xyz[i * 3 + 2] / sp.scale + sp.center[2];
           if (Math.abs(z - sec.z) > tol) {
-            off++;
+            offCount++;
             if (Number.isNaN(example)) example = z;
           }
         }
         zCheck.push(
-          off
-            ? `${sec.name}: ${off.toLocaleString()} of ${total.toLocaleString()} cells are NOT at z ${formatValue(sec.z)} (e.g. ${formatValue(example)}) — corrupt coordinate buffer`
+          offCount
+            ? `${sec.name}: ${offCount.toLocaleString()} of ${total.toLocaleString()} cells are NOT at z ${formatValue(sec.z)} (e.g. ${formatValue(example)}) — corrupt coordinate buffer`
             : `${sec.name}: ${total.toLocaleString()} cells all at z ${formatValue(sec.z)}`,
         );
       }
     }
-    const gl = this.viewer.renderer.getContext();
-    const ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const renderer = ext
-      ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL))
-      : String(gl.getParameter(gl.RENDERER));
-    return `Drawn: ${drawn.join(', ') || 'nothing'}${noSection ? `; no-section points ${noSection} px` : ''}. Visible per section table: ${expected.join(', ') || 'none'}.${zCheck.length ? ` Buffer check — ${zCheck.join('; ')}.` : ''} Layout ${this.store.slice('layout').mode}, DPR ${window.devicePixelRatio}, ${renderer}, loaded ${this.loadInfo?.loadMode ?? 'n/a'}.`;
+    const flags = new URLSearchParams(location.search).get('gl') || 'none';
+    return [
+      `SPV diagnostic ${new Date().toISOString()}`,
+      `Renderer ${renderer}; DPR ${window.devicePixelRatio}; canvas ${width}×${height} CSS px; context: ${attrText}; gl flags: ${flags}; loaded ${this.loadInfo?.loadMode ?? 'n/a'}; layout ${this.store.slice('layout').mode}`,
+      `Frame: ${stats.calls} draw calls, ${stats.points.toLocaleString()} point vertices, ${stats.lines} line segments, ${stats.triangles} triangles`,
+      `Drawn: ${off ? tally(off.ids) : 'n/a'} [offscreen census]`,
+      `Drawn on screen: ${scr ? tally(scr.ids) : 'n/a'}; footprint ${drawnBox}`,
+      `Expected footprint from the CPU projection of ${nVis.toLocaleString()} visible cells: ${cpuBox}`,
+      `Visible per section table: ${expected.join(', ') || 'none'}`,
+      zCheck.length ? `Buffer check — ${zCheck.join('; ')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   // --- export / share -----------------------------------------------------------------------------------
