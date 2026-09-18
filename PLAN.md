@@ -208,4 +208,5 @@ unchanged by the re-upload: 87,381 × 12 bytes = 1 MiB into the *position* buffe
 where the file's float64 coordinate array crosses 2 MiB, which is why the loader hypothesis fit so
 well. Playwright's WebKit on the same GPU does not reproduce it. Fix: `PointCloud` draws in batches
 of 65,536 points with separate sub-1 MiB buffers (`uIdOffset` keeps ids global); the GPU picker and
-the census swap materials per batch. Chromium and WebKit report 0 displaced cells; Safari pending.
+the census swap materials per batch. Chromium, WebKit and the owner's Safari 26.5 report 0 displaced
+cells and a GPU footprint matching the CPU projection within 2 px.

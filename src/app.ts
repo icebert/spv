@@ -1983,7 +1983,7 @@ export class App {
       `Renderer ${renderer}; DPR ${window.devicePixelRatio}; canvas ${width}×${height} CSS px; context: ${attrText}; gl flags: ${flags}; loaded ${this.loadInfo?.loadMode ?? 'n/a'}; layout ${this.store.slice('layout').mode}`,
       `Frame: ${stats.calls} draw calls, ${stats.points.toLocaleString()} point vertices, ${stats.lines} line segments, ${stats.triangles} triangles`,
       `Drawn: ${off ? tally(off.ids) : 'n/a'} [offscreen census]`,
-      `Drawn on screen: ${scr ? tally(scr.ids) : 'n/a'}; footprint ${drawnBox}`,
+      `Drawn on screen: ${scr ? tally(scr.ids) : 'n/a'}; footprint ${drawnBox}${attrs?.antialias ? ' (with antialiasing, edge pixels blend into neighbouring ids: small counts of other sections are expected)' : ''}`,
       `Expected footprint from the CPU projection of ${nVis.toLocaleString()} visible cells: ${cpuBox}`,
       `Visible per section table: ${expected.join(', ') || 'none'}`,
       zCheck.length ? `Buffer check — ${zCheck.join('; ')}` : '',
