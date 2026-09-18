@@ -33,15 +33,19 @@ export function encodeIndexList(list: number[]): string {
   return parts.join(',');
 }
 
+/** Upper bound on a decoded index list, so a crafted link cannot ask for hundreds of millions. */
+export const MAX_INDEX_LIST = 100_000;
+
 export function decodeIndexList(s: string): number[] {
   const out: number[] = [];
   for (const part of s.split(',')) {
+    if (out.length >= MAX_INDEX_LIST) break;
     if (part === '') continue;
     const m = /^(\d+)-(\d+)$/.exec(part);
     if (m) {
       const a = Number(m[1]);
       const b = Number(m[2]);
-      for (let i = a; i <= b && i - a < 100000; i++) out.push(i);
+      for (let i = a; i <= b && out.length < MAX_INDEX_LIST; i++) out.push(i);
     } else if (/^\d+$/.test(part)) out.push(Number(part));
   }
   return out;
@@ -62,6 +66,13 @@ const nums = (s: string | null, n: number): number[] | null => {
   if (!s) return null;
   const v = s.split(',').map(Number);
   return v.length === n && v.every(Number.isFinite) ? v : null;
+};
+
+/** A finite number from the hash, or the default when the key is absent or does not parse. */
+const finite = (s: string | null, fallback: number): number => {
+  if (s === null || s === '') return fallback;
+  const v = Number(s);
+  return Number.isFinite(v) ? v : fallback;
 };
 
 export function serializeState(s: ViewerState): string {
@@ -170,7 +181,7 @@ export function parseState(hash: string): { state: ViewerState; version: number 
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
   const p = new URLSearchParams(raw);
   const s = defaultState();
-  const version = p.has('v') ? Number(p.get('v')) : null;
+  const version = p.has('v') && Number.isFinite(Number(p.get('v'))) ? Number(p.get('v')) : null;
   if (p.get('local') === '1') s.dataset.local = true;
   s.dataset.id = p.get('dataset');
   s.dataset.url = p.get('url');
@@ -190,10 +201,10 @@ export function parseState(hash: string): { state: ViewerState; version: number 
   if (p.has('zs')) s.coords.zScale = Number(p.get('zs')) || 1;
   const lm = p.get('lm');
   if (lm && (LAYOUT_MODES as string[]).includes(lm)) s.layout.mode = lm as LayoutMode;
-  if (p.has('sp')) s.layout.spacing = Number(p.get('sp'));
+  s.layout.spacing = finite(p.get('sp'), s.layout.spacing);
   s.layout.uniformSpacing = p.get('us') === '1';
-  if (p.has('gap')) s.layout.gap = Number(p.get('gap'));
-  if (p.has('ex')) s.layout.explode = Number(p.get('ex'));
+  s.layout.gap = finite(p.get('gap'), s.layout.gap);
+  s.layout.explode = finite(p.get('ex'), s.layout.explode);
   if (p.has('cur')) s.layout.current = Math.max(0, Number(p.get('cur')) || 0);
   if (p.has('hs')) s.layout.hidden = decodeIndexList(p.get('hs')!);
   s.layout.dimOthers = p.get('dim') === '1';
@@ -203,14 +214,9 @@ export function parseState(hash: string): { state: ViewerState; version: number 
     for (const part of p.get('al')!.split(';')) {
       const m = /^(\d+):(-?[\d.]+),(-?[\d.]+),(-?[\d.]+),([xy]*)(?:,(-?[\d.]+))?$/.exec(part);
       if (!m) continue;
-      alignment[Number(m[1])] = {
-        dx: Number(m[2]),
-        dy: Number(m[3]),
-        dz: m[6] ? Number(m[6]) : 0,
-        rot: Number(m[4]),
-        fx: m[5].includes('x'),
-        fy: m[5].includes('y'),
-      };
+      const [dx, dy, rot, dz] = [m[2], m[3], m[4], m[6] ?? '0'].map(Number);
+      if (![dx, dy, rot, dz].every(Number.isFinite)) continue;
+      alignment[Number(m[1])] = { dx, dy, dz, rot, fx: m[5].includes('x'), fy: m[5].includes('y') };
     }
     s.layout.alignment = alignment;
   }
@@ -219,10 +225,10 @@ export function parseState(hash: string): { state: ViewerState; version: number 
     s.graph.key = p.get('gr') === '*' ? null : p.get('gr');
   }
   if (p.has('gc') && /^[0-9a-f]{6}$/i.test(p.get('gc')!)) s.graph.color = `#${p.get('gc')}`;
-  if (p.has('go')) s.graph.opacity = Number(p.get('go'));
+  s.graph.opacity = finite(p.get('go'), s.graph.opacity);
   if (p.has('ge')) s.graph.maxEdges = Number(p.get('ge')) || s.graph.maxEdges;
   if (p.get('img') === '0') s.images.enabled = false;
-  if (p.has('io')) s.images.opacity = Number(p.get('io'));
+  s.images.opacity = finite(p.get('io'), s.images.opacity);
   const ir = p.get('ir');
   if (ir === 'hires' || ir === 'lowres' || ir === 'auto') s.images.resolution = ir;
   s.images.grayscale = p.get('ig') === '1';
@@ -267,13 +273,13 @@ export function parseState(hash: string): { state: ViewerState; version: number 
   if (cly) s.filter.clipY = [cly[0], cly[1]];
   if (p.get('tissue') === '0') s.filter.inTissueOnly = false;
   if (p.has('sub')) s.filter.subsample = Number(p.get('sub')) || null;
-  if (p.has('ps')) s.appearance.pointSize = Number(p.get('ps'));
+  s.appearance.pointSize = finite(p.get('ps'), s.appearance.pointSize);
   if (p.get('ts') === '1') {
     s.appearance.trueSize = true;
     s.appearance.sizeMode = 'world';
   } else if (p.get('sm') === 'attenuated' || p.get('sm') === 'screen' || p.get('sm') === 'world')
     s.appearance.sizeMode = p.get('sm') as typeof s.appearance.sizeMode;
-  if (p.has('op')) s.appearance.opacity = Number(p.get('op'));
+  s.appearance.opacity = finite(p.get('op'), s.appearance.opacity);
   if (p.get('sh') === 'square') s.appearance.shape = 'square';
   if (p.get('bg') === 'light') s.appearance.background = 'light';
   if (p.has('hl')) {

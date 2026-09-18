@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   decodeIndexList,
   encodeIndexList,
+  MAX_INDEX_LIST,
   parseState,
   serializeState,
 } from '../../src/state/urlState';
@@ -131,5 +132,37 @@ describe('url state', () => {
     s.dataset.id = 'ignored';
     expect(serializeState(s)).toBe('v=1&local=1');
     expect(parseState('v=1&local=1').state.dataset.local).toBe(true);
+  });
+});
+
+describe('url state: malformed links', () => {
+  it('falls back to defaults for numbers that do not parse', () => {
+    const d = defaultState();
+    const { state, version } = parseState(
+      'v=x&sp=abc&gap=&ex=NaN&go=1e999&io=--1&op=x&ps=1.2.3&zs=q&cur=q&sub=q',
+    );
+    expect(version).toBeNull();
+    expect(state.layout.spacing).toBe(d.layout.spacing);
+    expect(state.layout.gap).toBe(d.layout.gap);
+    expect(state.layout.explode).toBe(d.layout.explode);
+    expect(state.graph.opacity).toBe(d.graph.opacity);
+    expect(state.images.opacity).toBe(d.images.opacity);
+    expect(state.appearance.opacity).toBe(d.appearance.opacity);
+    expect(state.appearance.pointSize).toBe(d.appearance.pointSize);
+    expect(state.coords.zScale).toBe(1);
+    expect(state.layout.current).toBe(0);
+    expect(state.filter.subsample).toBeNull();
+    // well-formed values still apply
+    expect(parseState('sp=0.5&ps=3').state.layout.spacing).toBe(0.5);
+    expect(parseState('sp=0.5&ps=3').state.appearance.pointSize).toBe(3);
+  });
+
+  it('caps decoded index lists and skips alignment entries with bad numbers', () => {
+    const huge = Array.from({ length: 20 }, () => '0-99999').join(',');
+    expect(decodeIndexList(huge).length).toBe(MAX_INDEX_LIST);
+    expect(decodeIndexList('0-999999999999').length).toBe(MAX_INDEX_LIST);
+    const { state } = parseState('al=0:1,2,3,x;1:1.2.3,0,0,;2:0,0,0,y,5');
+    expect(Object.keys(state.layout.alignment)).toEqual(['0', '2']);
+    expect(state.layout.alignment[2]).toEqual({ dx: 0, dy: 0, dz: 5, rot: 0, fx: false, fy: true });
   });
 });

@@ -30,5 +30,19 @@ export default defineConfig({
     timeout: 240_000,
     env: { VITE_BASE: base },
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    // `npm run e2e:webkit` runs the policy tests in WebKit (Safari's engine), which applies the
+    // Content Security Policy to workers and WebAssembly differently from Chromium. Opt-in because
+    // it needs `npx playwright install webkit` and is not part of CI.
+    ...(process.env.SPV_WEBKIT
+      ? [
+          {
+            name: 'webkit',
+            use: { browserName: 'webkit' as const, launchOptions: {} },
+            grep: /Content Security Policy|non-http\(s\) URL/,
+          },
+        ]
+      : []),
+  ],
 });

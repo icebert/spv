@@ -16,7 +16,10 @@ and the `D` diagnostic report show it together with the build stamp (short commi
   styles go through the CSSOM so the Content Security Policy allows no inline styles at all;
   install scripts are disabled for dependencies; `npm audit signatures` runs in CI; GitHub
   Actions are pinned to commit hashes with non-persisted, read-only credentials. `SECURITY.md`
-  added.
+  added. Second pass: the deploy workflow grants Pages and OIDC permissions to the deploy job only;
+  share-link numbers that do not parse fall back to defaults and index lists are capped; the
+  dataset manifest is validated entry by entry; `npm run e2e:webkit` runs the policy tests in
+  WebKit (Safari's engine).
 
 ## 0.1.0 (2026-09-17)
 

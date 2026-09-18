@@ -6,6 +6,7 @@
 import { versionLine } from './version';
 import { csvCell } from './util/csv';
 import { unsafeUrlReason } from './util/safeUrl';
+import { manifestEntries, type ManifestEntry } from './state/manifest';
 import { recentErrors, recordError } from './util/errorLog';
 import type { ColormapName } from './color/colormaps';
 import { paletteFor } from './color/palettes';
@@ -41,22 +42,7 @@ import {
 import { Matrix4 } from 'three';
 import { Store } from './state/store';
 import { parseState, serializeState } from './state/urlState';
-import { defaultState, type AlignmentState, type ViewerState } from './state/viewerState';
-
-export interface ManifestEntry {
-  id: string;
-  name: string;
-  description?: string;
-  url: string;
-  size_bytes?: number;
-  spatial_key?: string;
-  library_key?: string;
-  default_color_by?: { type: string; key: string };
-  default_tooltip_fields?: string[];
-  example_genes?: string[];
-  /** per-section manual alignment applied by default (file units / degrees), keyed by section name */
-  section_alignment?: Record<string, Partial<AlignmentState>>;
-}
+import { defaultState, type ViewerState } from './state/viewerState';
 
 export interface LegendModel {
   key: string;
@@ -318,8 +304,13 @@ export class App {
     try {
       const res = await fetch(`${this.base}data/datasets.json`, { cache: 'no-cache' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { datasets: ManifestEntry[] };
-      this.manifest = json.datasets ?? [];
+      const { entries, skipped } = manifestEntries(await res.json());
+      this.manifest = entries;
+      if (skipped > 0)
+        this.notice(
+          `${skipped} ${skipped === 1 ? 'entry' : 'entries'} in data/datasets.json ${skipped === 1 ? 'lacks' : 'lack'} an id, name or url and ${skipped === 1 ? 'was' : 'were'} skipped.`,
+          'warn',
+        );
     } catch (err) {
       this.manifest = [];
       this.notice(
