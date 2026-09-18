@@ -9,6 +9,11 @@ and the `D` diagnostic report show it together with the build stamp (short commi
   registry attestations that npm 10 rejected with `EMISSINGSIGNATUREKEY`, which failed
   `npm audit signatures` on the first GitHub Actions run.
 
+- Dependencies: the Dependabot bump of TypeScript from 5.9.3 to 7.0.2 (and `@types/node` to
+  26.6.1) is reverted; typescript-eslint 8.70.0 accepts TypeScript below 6.1 only, so `npm ci`
+  failed with `ERESOLVE`. Dependabot now skips TypeScript major versions until typescript-eslint
+  supports them.
+
 - Tablets: touch targets grow to 36 px on coarse pointers; a long press stands in for Shift-click
   (solo) on legend entries and sections; the selection bar offers Lasso and Box buttons; a
   Fullscreen button appears where the browser allows it; the pinned tooltip sits above the finger;
