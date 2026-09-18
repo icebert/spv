@@ -5,6 +5,12 @@ and the `D` diagnostic report show it together with the build stamp (short commi
 
 ## Unreleased
 
+- Tablets: touch targets grow to 36 px on coarse pointers; a long press stands in for Shift-click
+  (solo) on legend entries and sections; the selection bar offers Lasso and Box buttons; a
+  Fullscreen button appears where the browser allows it; the pinned tooltip sits above the finger;
+  portrait tablets up to 900 px wide get the sheet layout; safe-area insets are respected; no text
+  selection or callouts on controls and the view.
+
 - Security: `#url=` and the URL box accept http(s) targets only; CSV/TSV exports neutralise
   formula-leading cells; images above 512 M samples are refused before allocation; element
   styles go through the CSSOM so the Content Security Policy allows no inline styles at all;

@@ -18,6 +18,9 @@ export function createSelection(app: App, viewport: HTMLElement, canvas: HTMLCan
   let path: [number, number][] = [];
   let box = false;
   let drawing = false;
+  // Chosen shape; Shift-drag still forces a box. Touch users have no Shift key, so the bar offers
+  // the choice as two buttons.
+  let shape: 'lasso' | 'box' = 'lasso';
 
   const resize = () => {
     const r = viewport.getBoundingClientRect();
@@ -57,7 +60,7 @@ export function createSelection(app: App, viewport: HTMLElement, canvas: HTMLCan
     resize();
     overlay.style.display = 'block';
     drawing = true;
-    box = e.shiftKey;
+    box = e.shiftKey || shape === 'box';
     path = [local(e)];
     canvas.setPointerCapture(e.pointerId);
     e.preventDefault();
@@ -96,14 +99,30 @@ export function createSelection(app: App, viewport: HTMLElement, canvas: HTMLCan
       return;
     }
     bar.style.display = 'flex';
+    const shapeButton = (s: 'lasso' | 'box', label: string) =>
+      button(
+        label,
+        () => {
+          shape = s;
+          render();
+        },
+        {
+          className: `spv-small${shape === s ? ' spv-primary' : ''}`,
+          title:
+            s === 'box'
+              ? 'Drag a rectangle (or Shift-drag in lasso mode)'
+              : 'Draw around the cells',
+        },
+      );
     bar.append(
       el(
         'span',
         null,
         app.selectMode && !n
-          ? 'Select mode: drag a lasso (Shift-drag for a box)'
+          ? 'Drag on the view to select'
           : `${fmtInt(n)} cell${n === 1 ? '' : 's'} selected`,
       ),
+      ...(app.selectMode && !n ? [shapeButton('lasso', 'Lasso'), shapeButton('box', 'Box')] : []),
       ...(n
         ? [
             button(

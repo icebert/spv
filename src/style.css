@@ -55,6 +55,9 @@ body {
 #app {
   position: fixed;
   inset: 0;
+  /* iPad and phone safe areas (viewport-fit=cover in index.html) */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
   display: grid;
   grid-template-rows: var(--spv-topbar) 1fr;
   grid-template-columns: var(--spv-sidebar) minmax(0, 1fr);
@@ -62,6 +65,19 @@ body {
 }
 #app.spv-sidebar-hidden {
   grid-template-columns: 0 minmax(0, 1fr);
+}
+/* Controls and the 3-D view are operated by finger as much as by mouse: no text selection or
+   long-press callouts on them. */
+.spv-viewport,
+.spv-topbar,
+.spv-tabs,
+.spv-btn,
+.spv-list-row,
+.spv-legend-row,
+.spv-zbar {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 #app.spv-sidebar-hidden .spv-sidebar {
   display: none;
@@ -819,7 +835,8 @@ input[type='color']::-webkit-color-swatch {
   }
 }
 
-@media (max-width: 800px) {
+/* Portrait tablets (iPad 768 to 834 px) and phones: the panels become a sheet under the view. */
+@media (max-width: 900px) {
   :root {
     --spv-sidebar: 0px;
   }
@@ -847,6 +864,51 @@ input[type='color']::-webkit-color-swatch {
   }
   .spv-legend-float {
     max-width: 160px;
+  }
+}
+/* Touch screens: every target at least 36 px tall (Apple and Material ask for 44 and 48 pt with
+   spacing; 36 px plus the row gaps meets that in practice without doubling the sidebar's height). */
+@media (pointer: coarse) {
+  .spv-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+  }
+  .spv-btn.spv-icon {
+    min-width: 36px;
+    min-height: 36px;
+  }
+  .spv-tab {
+    padding: 12px 6px 10px;
+  }
+  .spv-list-row,
+  .spv-legend-row {
+    min-height: 36px;
+  }
+  .spv-legend-row {
+    padding: 4px 6px;
+  }
+  .spv-swatch {
+    width: 14px;
+    height: 14px;
+  }
+  select,
+  input[type='text'],
+  input[type='search'],
+  input[type='number'] {
+    min-height: 36px;
+  }
+  input[type='range'] {
+    height: 32px;
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    width: 20px;
+    height: 20px;
+  }
+  .spv-toast button,
+  .spv-tooltip button {
+    min-width: 36px;
+    min-height: 36px;
   }
 }
 @media (max-width: 600px) {

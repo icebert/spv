@@ -72,16 +72,73 @@ export function button(
  * Make a non-button element operable from the keyboard: it joins the tab order and Enter or
  * Space fire its click handler (Shift is passed through, so Shift-click shortcuts keep working).
  */
+/** Touch has no Shift key: holding a row this long fires a Shift-click (solo) instead of a click. */
+export const LONG_PRESS_MS = 450;
+
+// After a long press the browser still delivers its own click (and, on Android, a context menu)
+// when the finger lifts. The row that was held is usually rebuilt by then (a solo re-renders the
+// legend) and loses the pointer, so both the lift-off and the guard live on the document.
+let armed = false; // a long press fired and the finger has not lifted yet
+let swallowUntil = 0;
+let swallowInstalled = false;
+function installSwallow(): void {
+  if (swallowInstalled) return;
+  swallowInstalled = true;
+  const swallow = (e: Event) => {
+    if (e.isTrusted && (armed || Date.now() < swallowUntil)) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }
+  };
+  const lift = () => {
+    if (!armed) return;
+    armed = false;
+    // The browser's click arrives a few ms after the finger lifts; the window is short so that
+    // the next deliberate tap is not eaten.
+    swallowUntil = Date.now() + 400;
+  };
+  document.addEventListener('click', swallow, true);
+  document.addEventListener('contextmenu', swallow, true);
+  document.addEventListener('pointerup', lift, true);
+  document.addEventListener('pointercancel', lift, true);
+}
+
 export function pressable<T extends HTMLElement>(node: T, label?: string): T {
   node.setAttribute('role', 'button');
   node.tabIndex = 0;
   if (label) node.setAttribute('aria-label', label);
+  const fire = (shiftKey: boolean) =>
+    node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey }));
   node.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
-    node.dispatchEvent(
-      new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: e.shiftKey }),
-    );
+    fire(e.shiftKey);
+  });
+  // Long press with a finger = Shift-click; see installSwallow() for the click that follows.
+  installSwallow();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let start: [number, number] | null = null;
+  const cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    start = null;
+  };
+  node.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    start = [e.clientX, e.clientY];
+    timer = setTimeout(() => {
+      timer = null;
+      armed = true;
+      fire(true);
+    }, LONG_PRESS_MS);
+  });
+  node.addEventListener('pointermove', (e) => {
+    if (start && Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 8) cancel();
+  });
+  node.addEventListener('pointerup', cancel);
+  node.addEventListener('pointercancel', cancel);
+  node.addEventListener('contextmenu', (e) => {
+    if (timer) e.preventDefault(); // a menu opening before the timer fires would end the hold
   });
   return node;
 }

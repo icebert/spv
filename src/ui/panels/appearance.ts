@@ -120,6 +120,13 @@ export function appearancePanel(app: App): Panel {
           button('Front (2)', () => preset('front')),
           button('Side (3)', () => preset('side')),
           button('Iso (4)', () => preset('iso')),
+          // Tablets have no F key; the button appears wherever the browser allows fullscreen.
+          document.fullscreenEnabled
+            ? button('Fullscreen (F)', () => {
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else void document.getElementById('app')?.requestFullscreen();
+              })
+            : null,
         ),
       ),
     );

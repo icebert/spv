@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { devices, expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -436,7 +436,7 @@ test.describe('nice-to-haves 5-7', () => {
     await waitReady(page);
     await page.keyboard.press('x');
     await page.waitForFunction(() => window.__spv.app.selectMode === true);
-    await expect(page.locator('.spv-selection-bar')).toContainText('Select mode');
+    await expect(page.locator('.spv-selection-bar')).toContainText('Drag on the view to select');
     const canvas = page.locator('.spv-viewport canvas').first();
     const box = (await canvas.boundingBox())!;
     const cx = box.x + box.width * 0.55;
@@ -625,5 +625,116 @@ test.describe('production hardening', () => {
     expect(messages).toContain('synthetic rejection for the test');
     const report: string = await page.evaluate(() => window.__spv.app.drawnSectionsReport());
     expect(report).toMatch(/Recent errors \(\d+\):.*synthetic rejection for the test/);
+  });
+});
+
+test.describe('tablet', () => {
+  // The device profile brings viewport, touch, mobile emulation and a coarse pointer; the browser
+  // stays the project's Chromium.
+  const { defaultBrowserType: _browser, ...IPAD } = devices['iPad (gen 7)'];
+  test.use(IPAD);
+
+  const touch = async (page: Page) => {
+    const client = await page.context().newCDPSession(page);
+    return (type: 'touchStart' | 'touchMove' | 'touchEnd', pts: { x: number; y: number }[]) =>
+      client.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: pts.map((p, id) => ({ ...p, id })),
+      });
+  };
+  const canvasCentre = async (page: Page) => {
+    const r = (await page.getByLabel('SPV 3D view').boundingBox())!;
+    return { cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+  };
+
+  test('portrait gets the sheet layout, landscape the sidebar, and controls are at least 36 px tall', async ({
+    page,
+  }) => {
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+    const boxes = () =>
+      page.evaluate(() => {
+        const b = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().toJSON();
+        return { app: b('#app'), view: b('.spv-viewport'), sidebar: b('.spv-sidebar') };
+      });
+    let bx = await boxes();
+    expect(Math.round(bx.view.width)).toBe(810);
+    expect(bx.sidebar.top).toBeGreaterThanOrEqual(bx.view.bottom - 1);
+    expect(await page.evaluate(() => document.getElementById('app')!.scrollWidth)).toBe(810);
+    await page.locator('.spv-tab', { hasText: 'Color' }).click();
+    const minHeight = (sel: string) =>
+      page.evaluate((sel) => {
+        const hs = [...document.querySelectorAll(sel)]
+          .map((e) => e.getBoundingClientRect().height)
+          .filter((h) => h > 0);
+        return hs.length ? Math.min(...hs) : Infinity;
+      }, sel);
+    for (const sel of ['.spv-btn', '.spv-tab', '.spv-legend-row', 'select'])
+      expect(await minHeight(sel), sel).toBeGreaterThanOrEqual(36);
+    await page.setViewportSize({ width: 1080, height: 810 });
+    await page.waitForTimeout(200);
+    bx = await boxes();
+    expect(Math.round(bx.sidebar.width)).toBe(320);
+    expect(bx.view.left).toBeGreaterThanOrEqual(bx.sidebar.right - 1);
+  });
+
+  test('one finger orbits, two fingers zoom, a tap pins a cell', async ({ page }) => {
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    const send = await touch(page);
+    const { cx, cy } = await canvasCentre(page);
+    const cam = () => page.evaluate(() => JSON.stringify(window.__spv.app.viewer.rig.getState()));
+    const c0 = await cam();
+    await send('touchStart', [{ x: cx, y: cy }]);
+    for (let i = 1; i <= 8; i++) await send('touchMove', [{ x: cx + i * 12, y: cy + i * 4 }]);
+    await send('touchEnd', []);
+    await expect.poll(cam).not.toBe(c0);
+    const c1 = await cam();
+    await send('touchStart', [
+      { x: cx - 40, y: cy },
+      { x: cx + 40, y: cy },
+    ]);
+    for (let i = 1; i <= 8; i++)
+      await send('touchMove', [
+        { x: cx - 40 - i * 15, y: cy },
+        { x: cx + 40 + i * 15, y: cy },
+      ]);
+    await send('touchEnd', []);
+    await expect.poll(cam).not.toBe(c1);
+    await page.touchscreen.tap(cx, cy);
+    await expect(page.locator('.spv-tooltip')).toBeVisible();
+    // above the finger, not under the hand
+    const tip = (await page.locator('.spv-tooltip').boundingBox())!;
+    expect(tip.y + tip.height).toBeLessThan(cy);
+  });
+
+  test('a long press solos a legend entry and a touch drag in Box mode selects cells', async ({
+    page,
+  }) => {
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    const send = await touch(page);
+    await page.locator('.spv-tab', { hasText: 'Color' }).click();
+    const row = page.locator('.spv-legend-row').first();
+    const r = (await row.boundingBox())!;
+    const n = (await info(page)).legend.n as number;
+    await send('touchStart', [{ x: r.x + r.width / 2, y: r.y + r.height / 2 }]);
+    await page.waitForTimeout(650);
+    await send('touchEnd', []);
+    await expect.poll(async () => (await info(page)).legend.hidden.length).toBe(n - 1);
+    await page.waitForTimeout(600); // the click that follows the touch must not toggle it back
+    expect((await info(page)).legend.hidden.length).toBe(n - 1);
+    await page.locator('.spv-legend-row').nth(1).tap(); // a plain tap still toggles one entry
+    await expect.poll(async () => (await info(page)).legend.hidden.length).toBe(n - 2);
+
+    await page.evaluate(() => window.__spv.app.setSelectMode(true));
+    await page.getByRole('button', { name: 'Box', exact: true }).tap();
+    const { cx, cy } = await canvasCentre(page);
+    await send('touchStart', [{ x: cx - 120, y: cy - 120 }]);
+    for (let i = 1; i <= 6; i++)
+      await send('touchMove', [{ x: cx - 120 + i * 40, y: cy - 120 + i * 40 }]);
+    await send('touchEnd', []);
+    await expect.poll(async () => (await info(page)).selection).toBeGreaterThan(0);
   });
 });

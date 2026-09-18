@@ -62,7 +62,7 @@ export function createTopbar(app: App): HTMLElement {
     { title: 'Copy a link that restores this view' },
   );
   const selectBtn = button('Select', () => app.setSelectMode(!app.selectMode), {
-    title: 'Lasso / box selection (X). Drag on the view; Shift-drag for a box.',
+    title: 'Lasso / box selection (X). Drag on the view to select.',
   });
   app.on((e) => {
     if (e.type === 'selection') selectBtn.classList.toggle('spv-primary', app.selectMode);

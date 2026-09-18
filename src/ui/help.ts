@@ -37,7 +37,7 @@ export function openHelp(): void {
       el(
         'p',
         null,
-        'Drag to orbit, right-drag (or two-finger drag) to pan, scroll or pinch to zoom. Hover a cell for details; click to pin the tooltip and highlight the cell.',
+        'Drag to orbit, right-drag (or two-finger drag) to pan, scroll or pinch to zoom. Hover a cell for details; click to pin the tooltip and highlight the cell. On a touch screen: one finger orbits, two fingers pan and zoom, a tap pins a cell, and holding a legend entry or section for half a second solos it (the same as Shift-click).',
       ),
       el('h3', null, 'Keyboard shortcuts'),
       el(

@@ -17,6 +17,10 @@ page. Files never leave your browser.
 Links carry the whole view: `#dataset=<id>` opens a hosted dataset, `#url=<encoded-url>` any file
 on the web, and the **Share link** button adds layout, colours, filters and camera.
 
+On a tablet, one finger orbits, two fingers pan and zoom, a tap pins a cell's details, and holding
+a legend entry or a section for half a second solos it. Portrait tablets show the panels as a
+sheet under the view; the menu button hides them.
+
 ## What you can do
 
 - **Layouts.** Stack sections along z (real z or uniform spacing), recentre each section, tile them side by side, or step through them one at a time with play/pause. Show, hide or solo any section; adjust spacing, z-scale and explode.

@@ -45,10 +45,14 @@ export function createTooltip(app: App): { el: HTMLElement } {
     const margin = 14;
     const w = root.offsetWidth;
     const h = root.offsetHeight;
-    let x = info.x + margin;
-    let y = info.y + margin;
-    if (x + w > window.innerWidth - 8) x = info.x - w - margin;
+    // With a finger on the screen the point itself is covered, so the card goes above the touch;
+    // with a mouse it sits below and to the right of the cursor.
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    let x = coarse ? info.x - w / 2 : info.x + margin;
+    let y = coarse ? info.y - h - 3 * margin : info.y + margin;
+    if (x + w > window.innerWidth - 8) x = coarse ? window.innerWidth - w - 8 : info.x - w - margin;
     if (y + h > window.innerHeight - 8) y = info.y - h - margin;
+    if (coarse && y < 4) y = info.y + 3 * margin;
     root.style.left = `${Math.max(4, x)}px`;
     root.style.top = `${Math.max(4, y)}px`;
   };
