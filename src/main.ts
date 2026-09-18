@@ -271,7 +271,7 @@ function main(): void {
             .then(
               () =>
                 toast(
-                  `Diagnostic copied to the clipboard (${lines.length} lines). ${brief}`,
+                  `Diagnostic report copied to the clipboard (${lines.length} lines) — paste it with Cmd+V. ${brief}`,
                   'info',
                   20000,
                 ),

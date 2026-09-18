@@ -149,6 +149,11 @@ export class PointCloud {
     return this.geometry.getAttribute(name) as BufferAttribute;
   }
 
+  /** Diagnostic: mark every vertex attribute for re-upload from its CPU array. */
+  reupload(): void {
+    for (const name of Object.keys(this.geometry.attributes)) this.attr(name).needsUpdate = true;
+  }
+
   /** Continuous values (NaN allowed) driving the colormap. `null` clears. */
   setScalar(values: ArrayLike<number> | null): void {
     const a = this.attr('aScalar');

@@ -178,6 +178,12 @@ test.describe('demo dataset', () => {
     const gpu = box(/Drawn on screen: .*footprint x (\d+)–(\d+), y (\d+)–(\d+)/);
     const cpu = box(/Expected footprint .*: x (\d+)–(\d+), y (\d+)–(\d+)/);
     for (let k = 0; k < 4; k++) expect(Math.abs(gpu[k] - cpu[k])).toBeLessThanOrEqual(12);
+    // every drawn cell sits where the CPU projects it, before and after a re-upload
+    expect(report).toMatch(/^Displaced cells \(GPU centroid[^:]*: 0 of [\d,]+ drawn/m);
+    expect(report).toMatch(
+      /^After re-uploading all vertex attributes: displaced cells \(GPU centroid[^:]*: 0 of/m,
+    );
+    expect(report).toMatch(/drawn although the CPU hides them: 0$/m);
   });
 
   test('share link restores layout, colour and camera', async ({ page, context }) => {

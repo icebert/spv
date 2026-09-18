@@ -270,10 +270,12 @@ export class Viewer {
    */
   censusIds(
     mode: 'offscreen' | 'screen',
+    width = 320,
+    height = 200,
   ): { width: number; height: number; ids: Int32Array } | null {
     if (!this.pointCloud) return null;
     try {
-      return this.picker.censusIds(this.pointCloud, this.rig.camera, mode);
+      return this.picker.censusIds(this.pointCloud, this.rig.camera, mode, width, height);
     } finally {
       if (mode === 'screen') this.render();
     }

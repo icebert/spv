@@ -1970,6 +1970,13 @@ export class App {
         );
       }
     }
+    // Per-cell comparison: where the GPU drew each cell vs where the CPU projects it, at CSS
+    // resolution in an exact (non-antialiased) offscreen render; then again after re-uploading
+    // every vertex attribute from the CPU arrays.
+    const before = this.displacementReport(width, height);
+    this.pc?.reupload();
+    viewer.render();
+    const after = this.displacementReport(width, height);
     const flags = new URLSearchParams(location.search).get('gl') || 'none';
     return [
       `SPV diagnostic ${new Date().toISOString()}`,
@@ -1980,9 +1987,80 @@ export class App {
       `Expected footprint from the CPU projection of ${nVis.toLocaleString()} visible cells: ${cpuBox}`,
       `Visible per section table: ${expected.join(', ') || 'none'}`,
       zCheck.length ? `Buffer check — ${zCheck.join('; ')}` : '',
+      `Displaced cells ${before}`,
+      `After re-uploading all vertex attributes: displaced cells ${after}`,
     ]
       .filter(Boolean)
       .join('\n');
+  }
+
+  /**
+   * Render the ids at CSS resolution offscreen, take each drawn cell's pixel centroid and compare
+   * it with the CPU projection of the same cell. Reports cells drawn although the CPU hides them
+   * and cells drawn far from where the CPU puts them (with their id range, so a pattern such as
+   * "every row after 65,536" or "rows after a chunk boundary" is visible).
+   */
+  private displacementReport(width: number, height: number): string {
+    const sp = this.spatial;
+    const census = this.viewer.censusIds('offscreen', Math.max(1, width), Math.max(1, height));
+    if (!sp || !census) return 'n/a';
+    const { ids, width: w, height: h } = census;
+    const pts = this.projectPoints();
+    const sum = new Map<number, [number, number, number]>();
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (id < 0) continue;
+      const col = i % w;
+      const row = (i - col) / w;
+      let a = sum.get(id);
+      if (!a) {
+        a = [0, 0, 0];
+        sum.set(id, a);
+      }
+      a[0] += col + 0.5;
+      a[1] += h - 1 - row + 0.5;
+      a[2]++;
+    }
+    let hiddenDrawn = 0;
+    let displaced = 0;
+    let minId = Infinity;
+    let maxId = -1;
+    let sumDist = 0;
+    const bySection = new Map<number, number>();
+    const examples: string[] = [];
+    for (const [id, [sx, sy, n]] of sum) {
+      const cx = pts[id * 2];
+      const cy = pts[id * 2 + 1];
+      if (Number.isNaN(cx)) {
+        hiddenDrawn++;
+        continue;
+      }
+      const d = Math.hypot(sx / n - cx, sy / n - cy);
+      if (d <= 24) continue;
+      displaced++;
+      sumDist += d;
+      if (id < minId) minId = id;
+      if (id > maxId) maxId = id;
+      const ord = sp.sectionOf ? sp.sectionOf[id] : 0xffff;
+      bySection.set(ord, (bySection.get(ord) ?? 0) + 1);
+      if (examples.length < 3)
+        examples.push(
+          `#${id} drawn at (${Math.round(sx / n)}, ${Math.round(sy / n)}) vs CPU (${Math.round(cx)}, ${Math.round(cy)})`,
+        );
+    }
+    const secName = (ord: number) =>
+      ord === 0xffff ? 'no section' : (sp.sections[ord]?.name ?? `ordinal ${ord}`);
+    const bySec = [...bySection.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([ord, c]) => `${secName(ord)} ${c.toLocaleString()}`)
+      .join(', ');
+    return (
+      `(GPU centroid > 24 px from the CPU projection): ${displaced.toLocaleString()} of ${sum.size.toLocaleString()} drawn` +
+      (displaced
+        ? `; ids ${minId.toLocaleString()}–${maxId.toLocaleString()}; mean ${Math.round(sumDist / displaced)} px; by section: ${bySec}; e.g. ${examples.join('; ')}`
+        : '') +
+      `; drawn although the CPU hides them: ${hiddenDrawn.toLocaleString()}`
+    );
   }
 
   // --- export / share -----------------------------------------------------------------------------------
