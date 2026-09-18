@@ -2,6 +2,7 @@ import type { App } from '../../app';
 import { COLORMAP_NAMES, colormapCss, type ColormapName } from '../../color/colormaps';
 import {
   button,
+  pressable,
   checkbox,
   clear,
   dualSlider,
@@ -95,7 +96,7 @@ export function colorPanel(app: App): Panel {
     }
     const cols = s.obs.columns.filter((col) => col.kind !== 'unsupported');
     const options = [
-      { value: '', label: '— none (uniform) —' },
+      { value: '', label: 'None (uniform colour)' },
       ...cols.map((col) => ({
         value: `obs:${col.name}`,
         label: `${col.name} (${col.kind === 'categorical' ? `${col.nCategories} categories` : col.kind})`,
@@ -354,26 +355,29 @@ export function colorPanel(app: App): Panel {
         lg.categories.length > (app.legend?.hidden.size ?? -1) &&
         name === 'NA';
       const hidden = lg.hidden.has(i);
-      return el(
-        'div',
-        {
-          className: `spv-legend-row ${hidden ? 'spv-hidden' : ''}`,
-          title: 'Click to toggle, Shift-click to solo',
-          onClick: (e: Event) => {
-            if (
-              isNa &&
-              i >= lg.colors.length - 1 &&
-              lg.categories.at(-1) === 'NA' &&
-              i === lg.categories.length - 1
-            )
-              return;
-            if ((e as MouseEvent).shiftKey) app.soloCategory(i);
-            else app.toggleCategory(i);
+      return pressable(
+        el(
+          'div',
+          {
+            className: `spv-legend-row ${hidden ? 'spv-hidden' : ''}`,
+            title: 'Click to toggle, Shift-click to solo',
+            'aria-pressed': String(!hidden),
+            onClick: (e: Event) => {
+              if (
+                isNa &&
+                i >= lg.colors.length - 1 &&
+                lg.categories.at(-1) === 'NA' &&
+                i === lg.categories.length - 1
+              )
+                return;
+              if ((e as MouseEvent).shiftKey) app.soloCategory(i);
+              else app.toggleCategory(i);
+            },
           },
-        },
-        el('span', { className: 'spv-swatch', style: `background:${lg.colors[i]}` }),
-        el('span', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, name),
-        el('span', 'spv-count', fmtInt(lg.counts[i])),
+          el('span', { className: 'spv-swatch', style: `background:${lg.colors[i]}` }),
+          el('span', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap' }, name),
+          el('span', 'spv-count', fmtInt(lg.counts[i])),
+        ),
       );
     };
     if (items.length > 200) g.appendChild(virtualList(items, 22, rowEl, 360));

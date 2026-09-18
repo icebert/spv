@@ -4,6 +4,7 @@ import './style.css';
 import { App } from './app';
 import { LAYOUT_MODES } from './render/sections';
 import { createColorbar } from './ui/colorbar';
+import { createLegendFloat } from './ui/legendFloat';
 import { el, throttle } from './ui/dom';
 import { openHelp } from './ui/help';
 import { appearancePanel } from './ui/panels/appearance';
@@ -124,6 +125,7 @@ function main(): void {
   root.append(createTopbar(app), createSidebar(app, panels), viewport);
   createTooltip(app);
   createColorbar(app, viewport);
+  createLegendFloat(app, viewport);
   createSelection(app, viewport, app.viewer.renderer.domElement);
   const notice = el('div', { className: 'spv-overlay-notice', style: 'display:none' });
   viewport.appendChild(notice);
@@ -141,7 +143,7 @@ function main(): void {
         app.status === 'loading'
           ? `${app.statusMessage || 'Loading…'}`
           : !app.spatial && app.status === 'ready'
-            ? '2-D/unknown coordinates — pick X, Y (and z) sources in the Coordinates panel.'
+            ? 'No 3-D coordinates were detected. Pick the X, Y and z sources in the Coordinates panel.'
             : '';
     }
     if (e.type === 'progress' && e.progress && app.status === 'loading') {
@@ -272,7 +274,7 @@ function main(): void {
             .then(
               () =>
                 toast(
-                  `Diagnostic report copied to the clipboard (${lines.length} lines) — paste it with Cmd+V. ${brief}`,
+                  `Diagnostic report copied to the clipboard (${lines.length} lines). Paste it with Cmd+V. ${brief}`,
                   'info',
                   20000,
                 ),

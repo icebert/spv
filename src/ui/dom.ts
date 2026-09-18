@@ -67,6 +67,24 @@ export function button(
   return b;
 }
 
+/**
+ * Make a non-button element operable from the keyboard: it joins the tab order and Enter or
+ * Space fire its click handler (Shift is passed through, so Shift-click shortcuts keep working).
+ */
+export function pressable<T extends HTMLElement>(node: T, label?: string): T {
+  node.setAttribute('role', 'button');
+  node.tabIndex = 0;
+  if (label) node.setAttribute('aria-label', label);
+  node.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    node.dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true, shiftKey: e.shiftKey }),
+    );
+  });
+  return node;
+}
+
 export function checkbox(
   label: string,
   checked: boolean,

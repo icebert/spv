@@ -477,6 +477,41 @@ test.describe('nice-to-haves 5-7', () => {
 });
 
 const synthetic = path.join(ROOT, 'data/synthetic/synthetic_40k.h5ad');
+test.describe('presentation mode and small screens', () => {
+  test('hiding the sidebar shows a clickable legend on the viewport', async ({ page }) => {
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    const float = page.locator('.spv-legend-float');
+    await expect(float).toBeHidden();
+    await page.keyboard.press('h');
+    await expect(float).toBeVisible();
+    const n = (await info(page)).legend.n as number;
+    await expect(float.locator('.spv-legend-row')).toHaveCount(Math.min(n, 48));
+    await float.locator('.spv-legend-row').first().click();
+    await page.waitForFunction(() => window.__spv.info().legend.hidden.length === 1);
+    await page.keyboard.press('h');
+    await expect(float).toBeHidden();
+  });
+
+  test('a phone-width layout never grows past the screen, with or without the sidebar', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 420, height: 800 });
+    await page.goto('#dataset=demo');
+    await waitReady(page);
+    const size = () =>
+      page.evaluate(() => ({
+        app: document.getElementById('app')!.scrollWidth,
+        view: document.querySelector('.spv-viewport')!.clientWidth,
+      }));
+    await page.getByRole('tab', { name: 'Color' }).click();
+    expect((await size()).app).toBeLessThanOrEqual(420);
+    await page.keyboard.press('h');
+    await page.waitForFunction(() => document.querySelector('.spv-viewport')!.clientWidth === 420);
+    expect((await size()).app).toBeLessThanOrEqual(420);
+  });
+});
+
 test.describe('native 3-D synthetic dataset', () => {
   test.skip(!fs.existsSync(synthetic), 'run scripts/make_synthetic_demo.py to enable');
   test('takes the native-3D path with obsm/spatial3d', async ({ page }) => {

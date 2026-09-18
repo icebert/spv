@@ -57,11 +57,11 @@ body {
   inset: 0;
   display: grid;
   grid-template-rows: var(--spv-topbar) 1fr;
-  grid-template-columns: var(--spv-sidebar) 1fr;
+  grid-template-columns: var(--spv-sidebar) minmax(0, 1fr);
   overflow: hidden;
 }
 #app.spv-sidebar-hidden {
-  grid-template-columns: 0 1fr;
+  grid-template-columns: 0 minmax(0, 1fr);
 }
 #app.spv-sidebar-hidden .spv-sidebar {
   display: none;
@@ -105,6 +105,7 @@ input[type='range'] {
 /* top bar: a status line, read as a sentence */
 .spv-topbar {
   grid-column: 1 / 3;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -149,6 +150,7 @@ input[type='range'] {
 .spv-sidebar {
   grid-row: 2;
   grid-column: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -274,6 +276,7 @@ input[type='range'] {
   cursor: pointer;
   line-height: 1.4;
   color: var(--spv-text);
+  white-space: nowrap;
 }
 .spv-btn:hover:not(:disabled) {
   border-color: var(--spv-muted);
@@ -544,6 +547,17 @@ input[type='color']::-webkit-color-swatch {
 .spv-legend-row:hover {
   background: var(--spv-panel-2);
 }
+.spv-legend-row:focus-visible {
+  outline-offset: -2px;
+}
+.spv-legend-float-title {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 4px 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .spv-legend-row.spv-hidden {
   opacity: 0.4;
   text-decoration: line-through;
@@ -776,13 +790,27 @@ input[type='color']::-webkit-color-swatch {
   z-index: 3;
 }
 .spv-fatal {
-  padding: 40px;
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  padding: 40px 24px;
   max-width: 60ch;
   margin: 0 auto;
+  width: 100%;
 }
 .spv-fatal h1 {
-  color: var(--spv-text);
+  margin: 0 0 24px;
+  font-size: 20px;
   font-weight: 700;
+  color: var(--spv-text);
+}
+.spv-fatal h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.spv-fatal p {
+  margin: 0;
+  line-height: 1.5;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -795,8 +823,9 @@ input[type='color']::-webkit-color-swatch {
   :root {
     --spv-sidebar: 0px;
   }
-  #app {
-    grid-template-columns: 1fr;
+  #app,
+  #app.spv-sidebar-hidden {
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: var(--spv-topbar) 1fr auto;
   }
   .spv-topbar {
@@ -818,5 +847,14 @@ input[type='color']::-webkit-color-swatch {
   }
   .spv-legend-float {
     max-width: 160px;
+  }
+}
+@media (max-width: 600px) {
+  .spv-topbar {
+    gap: 6px;
+    padding: 0 8px;
+  }
+  .spv-wordmark small {
+    display: none;
   }
 }

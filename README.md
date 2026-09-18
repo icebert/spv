@@ -20,7 +20,7 @@ data conversion: the site is plain files served by GitHub Pages.
 - Squidpy conventions first: `obsm["spatial"]` / `obsm["spatial3d"]`, a `library_key` column matched against `uns["spatial"]`, tissue images with `scalefactors`, `uns/*_colors`, `obsp/*_connectivities`, `uns/moranI`. Generic AnnData files still work, and every coordinate source can be overridden.
 - Four section layouts applied in the vertex shader from a per-section transform table, so switching is instant and never re-uploads positions: **Stack** (native z or uniform spacing), **Stack normalized** (each section recentred), **Tile** (grid, top-down orthographic), **Single** (one section at a time). Spacing, tile gap, z-scale and z-explode sliders; a section stepper with play/pause; show/hide/solo per section.
 - Tissue image overlay per section, placed from `tissue_hires_scalef` / `tissue_lowres_scalef` exactly like `squidpy.pl.spatial_scatter`, with opacity, resolution choice, grayscale, a 256 MB texture budget and progressive loading after the first frame.
-- Colour by categorical `obs` (file palette or colour-blind-safe defaults; legend with counts, click to toggle, shift-click to solo, search and virtualisation for large legends), by numeric `obs`, or by gene expression from `X`, any layer or `raw.X`, with `log1p`, eight colormaps, percentile or explicit ranges and a colorbar. Colour changes are texture and uniform updates only.
+- Colour by categorical `obs` (file palette or colour-blind-safe defaults; legend with counts, click or press Enter to toggle, shift-click to solo, search and virtualisation for large legends; a compact copy floats on the viewport while the sidebar is hidden), by numeric `obs`, or by gene expression from `X`, any layer or `raw.X`, with `log1p`, eight colormaps, percentile or explicit ranges and a colorbar. Colour changes are texture and uniform updates only.
 - Filters: Visium `in_tissue`, native-frame X/Y clip planes, z range, deterministic random subsampling, category visibility.
 - Hover tooltip and click-to-pin with GPU picking (no raycasting), showing the cell index, section, the value driving the colour and up to six chosen `obs` fields.
 - Perspective or orthographic camera, presets, turntable, PNG export at 1× or 2× with optional transparent background, and a compact versioned share link that restores the whole view.
@@ -184,7 +184,7 @@ URL, before the `#`: `?gl=noaa` (no antialiasing), `?gl=opaque` (no alpha channe
 | Key | Action |
 |---|---|
 | `R` | Reset view |
-| `H` | Toggle sidebar |
+| `H` | Toggle sidebar (with it hidden, a compact clickable legend floats on the viewport) |
 | `F` | Toggle fullscreen |
 | `S` | Screenshot |
 | `1` / `2` / `3` / `4` | Top / front / side / isometric view |

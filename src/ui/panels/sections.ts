@@ -10,6 +10,7 @@ import {
   fmtNum,
   group,
   note,
+  pressable,
   radio,
   select,
   slider,
@@ -263,14 +264,17 @@ export function sectionsPanel(app: App): Panel {
           title,
         },
         cb,
-        el(
-          'span',
-          {
-            className: 'spv-grow',
-            style: 'cursor:pointer',
-            onClick: () => app.setCurrentSection(s.ordinal),
-          },
-          s.name,
+        pressable(
+          el(
+            'span',
+            {
+              className: 'spv-grow',
+              style: 'cursor:pointer',
+              onClick: () => app.setCurrentSection(s.ordinal),
+            },
+            s.name,
+          ),
+          `Make ${s.name} the current section`,
         ),
         el('span', 'spv-count', fmtInt(s.nCells)),
         showZ
