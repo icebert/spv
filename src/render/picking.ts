@@ -1,6 +1,7 @@
 /**
- * GPU picking: render point ids as colours into a 1×1 target at the cursor (via
- * `camera.setViewOffset`) and read one pixel back asynchronously. Never uses Raycaster.
+ * GPU picking: render point ids as colours into a small target around the cursor (via
+ * `camera.setViewOffset`) and read it back asynchronously. A mouse picks the exact pixel; a finger
+ * gets a radius, and the point nearest to the touch wins. Never uses Raycaster.
  */
 import {
   NearestFilter,
@@ -13,6 +14,13 @@ import {
 } from 'three';
 import type { PointCloud } from './points';
 
+export interface PickOptions {
+  /** Search radius in CSS pixels around the cursor; the nearest point wins. 0 = the exact pixel. */
+  radius?: number;
+  /** When another pick is in flight, wait for it instead of returning -2. */
+  wait?: boolean;
+}
+
 export class GpuPicker {
   private readonly target = new WebGLRenderTarget(1, 1, {
     minFilter: NearestFilter,
@@ -22,15 +30,18 @@ export class GpuPicker {
     depthBuffer: true,
     stencilBuffer: false,
   });
-  private readonly pixel = new Uint8Array(4);
-  private busy = false;
+  /** Edge of `target` in device pixels; resized when the radius changes. */
+  private edge = 1;
+  private pixels = new Uint8Array(4);
+  private inflight: Promise<number> | null = null;
   private readonly clearColor = new Color();
 
   constructor(private readonly renderer: WebGLRenderer) {}
 
   /**
    * @param x,y cursor in CSS pixels relative to the canvas
-   * @returns point index or -1
+   * @returns point index, -1 for background, or -2 when a pick is already in flight and
+   *   `opts.wait` is not set (hover simply retries on the next move)
    */
   async pick(
     points: PointCloud,
@@ -39,12 +50,40 @@ export class GpuPicker {
     y: number,
     cssWidth: number,
     cssHeight: number,
+    opts: PickOptions = {},
   ): Promise<number> {
-    if (this.busy) return -2;
-    this.busy = true;
+    while (this.inflight) {
+      if (!opts.wait) return -2;
+      await this.inflight;
+    }
+    const run = this.run(points, camera, x, y, cssWidth, cssHeight, opts.radius ?? 0);
+    this.inflight = run;
+    try {
+      return await run;
+    } finally {
+      this.inflight = null;
+    }
+  }
+
+  private async run(
+    points: PointCloud,
+    camera: Camera,
+    x: number,
+    y: number,
+    cssWidth: number,
+    cssHeight: number,
+    radius: number,
+  ): Promise<number> {
     this.restored = false;
     const r = this.renderer;
     const dpr = r.getPixelRatio();
+    const rad = Math.max(0, Math.ceil(radius * dpr));
+    const n = 2 * rad + 1;
+    if (n !== this.edge) {
+      this.target.setSize(n, n);
+      this.edge = n;
+      this.pixels = new Uint8Array(n * n * 4);
+    }
     const cam = camera as Camera & {
       setViewOffset(fw: number, fh: number, x: number, y: number, w: number, h: number): void;
       clearViewOffset(): void;
@@ -56,10 +95,10 @@ export class GpuPicker {
       cam.setViewOffset(
         Math.floor(cssWidth * dpr),
         Math.floor(cssHeight * dpr),
-        Math.floor(x * dpr),
-        Math.floor(y * dpr),
-        1,
-        1,
+        Math.floor(x * dpr) - rad,
+        Math.floor(y * dpr) - rad,
+        n,
+        n,
       );
       points.setPicking(true);
       r.setRenderTarget(this.target);
@@ -68,16 +107,28 @@ export class GpuPicker {
       r.render(points.object, camera);
       // readRenderTargetPixelsAsync issues the GPU read immediately and only awaits the fence,
       // so all render state can be restored before waiting; a frame drawn meanwhile is unaffected.
-      const pending = r.readRenderTargetPixelsAsync(this.target, 0, 0, 1, 1, this.pixel);
+      const pending = r.readRenderTargetPixelsAsync(this.target, 0, 0, n, n, this.pixels);
       this.restore(points, cam, prevTarget, prevAlpha);
       const buf = await pending;
-      const id = buf[0] | (buf[1] << 8) | (buf[2] << 16);
-      return id - 1;
+      // Nearest drawn point to the centre; the depth test already chose the front-most per pixel.
+      // Rows come back bottom-up, which does not matter for a distance from the centre.
+      let best = -1;
+      let bestDist = Infinity;
+      for (let py = 0, p = 0; py < n; py++) {
+        for (let px = 0; px < n; px++, p += 4) {
+          const id = (buf[p] | (buf[p + 1] << 8) | (buf[p + 2] << 16)) - 1;
+          if (id < 0) continue;
+          const d = (px - rad) ** 2 + (py - rad) ** 2;
+          if (d < bestDist) {
+            bestDist = d;
+            best = id;
+          }
+        }
+      }
+      return best;
     } catch {
       this.restore(points, cam, prevTarget, prevAlpha);
       return -1;
-    } finally {
-      this.busy = false;
     }
   }
 

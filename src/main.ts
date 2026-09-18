@@ -5,7 +5,7 @@ import { App } from './app';
 import { LAYOUT_MODES } from './render/sections';
 import { createColorbar } from './ui/colorbar';
 import { createLegendFloat } from './ui/legendFloat';
-import { el, throttle } from './ui/dom';
+import { el, TAP_RADIUS_PX, throttle } from './ui/dom';
 import { openHelp } from './ui/help';
 import { appearancePanel } from './ui/panels/appearance';
 import { colorPanel } from './ui/panels/color';
@@ -213,7 +213,8 @@ function main(): void {
     )
       return;
     const r = canvas.getBoundingClientRect();
-    void app.pin(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY);
+    const radius = e.pointerType === 'touch' ? TAP_RADIUS_PX : 0;
+    void app.pin(e.clientX - r.left, e.clientY - r.top, e.clientX, e.clientY, radius);
   });
 
   // drag & drop

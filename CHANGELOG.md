@@ -5,6 +5,10 @@ and the `D` diagnostic report show it together with the build stamp (short commi
 
 ## Unreleased
 
+- Touch: a tap pins the cell nearest to the finger within 12 px instead of the one under the
+  exact pixel, and a tap that arrives while a hover pick is still in flight waits for it instead
+  of unpinning. The tablet end-to-end test failed intermittently in CI for this reason.
+
 - CI: `.nvmrc` moves from Node 22 to Node 24 (current LTS). Its bundled npm 11 verifies the
   registry attestations that npm 10 rejected with `EMISSINGSIGNATUREKEY`, which failed
   `npm audit signatures` on the first GitHub Actions run.

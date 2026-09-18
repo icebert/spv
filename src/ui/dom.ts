@@ -74,6 +74,8 @@ export function button(
  */
 /** Touch has no Shift key: holding a row this long fires a Shift-click (solo) instead of a click. */
 export const LONG_PRESS_MS = 450;
+/** A fingertip covers about 7 mm: a tap pins the nearest cell within this many CSS px. */
+export const TAP_RADIUS_PX = 12;
 
 // After a long press the browser still delivers its own click (and, on Android, a context menu)
 // when the finger lifts. The row that was held is usually rebuilt by then (a solo re-renders the

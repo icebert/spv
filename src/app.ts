@@ -1808,9 +1808,13 @@ export class App {
     this.emit({ type: 'hover', info: null });
   }
 
-  async pin(x: number, y: number, clientX: number, clientY: number): Promise<void> {
+  /**
+   * Pin the point under the pointer, or the nearest one within `radius` CSS px (a fingertip covers
+   * far more than a pixel). Waits for a hover pick that is still in flight rather than unpinning.
+   */
+  async pin(x: number, y: number, clientX: number, clientY: number, radius = 0): Promise<void> {
     if (!this.pc || this.status !== 'ready') return;
-    const id = await this.viewer.pick(x, y);
+    const id = await this.viewer.pick(x, y, { radius, wait: true });
     if (id < 0) {
       this.clearPin();
       return;

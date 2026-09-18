@@ -15,7 +15,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { CameraRig, type ViewPreset } from './camera';
-import { GpuPicker } from './picking';
+import { GpuPicker, type PickOptions } from './picking';
 import type { PointCloud } from './points';
 import type { Bounds } from './sections';
 
@@ -301,10 +301,10 @@ export class Viewer {
     return this.renderer.getContext().getContextAttributes();
   }
 
-  /** Point index under the cursor (CSS px relative to the canvas), or -1. */
-  pick(x: number, y: number): Promise<number> {
+  /** Point index under the cursor (CSS px relative to the canvas), or -1; see `PickOptions`. */
+  pick(x: number, y: number, opts?: PickOptions): Promise<number> {
     if (!this.pointCloud) return Promise.resolve(-1);
-    return this.picker.pick(this.pointCloud, this.rig.camera, x, y, this.size.x, this.size.y);
+    return this.picker.pick(this.pointCloud, this.rig.camera, x, y, this.size.x, this.size.y, opts);
   }
 
   async screenshot(opts: ScreenshotOptions = {}): Promise<Blob> {
